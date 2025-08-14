@@ -1,12 +1,30 @@
 import WindowSystem from "./window.js";
 
+import ESKitLauncherElement from "./elements/launcher.js";
+
 export default class System {
   #process = new Map();
 
   constructor() {
+    // windowオブジェクトへの追加
     window.System = this;
 
+    // UIの初期化
+    this.initUI();
+
+    // ESKit Window System初期化
     this.WindowSystem = new WindowSystem();
+
+    // Custom Elementの登録
+    customElements.define("eskit-launcher", ESKitLauncherElement);
+  }
+
+  /**
+   * ESKit UIの初期化
+   */
+  initUI () {
+    const launcher = document.createElement("eskit-launcher");
+    document.body.appendChild(launcher);
   }
 
   /**
