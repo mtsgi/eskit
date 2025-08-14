@@ -55,9 +55,11 @@ export default class WindowSystem {
     shadowRoot.appendChild(templateElement);
 
     // style
-    const styleSheet = new CSSStyleSheet();
-    styleSheet.replaceSync(appInstance.style);
-    shadowRoot.adoptedStyleSheets = [styleSheet];
+    if (appInstance.style) {
+      const styleSheet = new CSSStyleSheet();
+      styleSheet.replaceSync(appInstance.style);
+      shadowRoot.adoptedStyleSheets = [styleSheet];
+    }
   }
 
   /**
