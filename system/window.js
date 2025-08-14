@@ -1,3 +1,5 @@
+import ESKitWindowElement from "./elements/window.js";
+
 export default class WindowSystem {
   #appElements = new Map();
 
@@ -9,6 +11,9 @@ export default class WindowSystem {
     this.rootElement = document.createElement("div");
     this.rootElement.id = "window-system";
     document.body.appendChild(this.rootElement);
+
+    // Custom Elementの登録
+    customElements.define("eskit-window", ESKitWindowElement);
   }
 
   /**
@@ -22,10 +27,18 @@ export default class WindowSystem {
       return;
     }
 
-    const appElement = document.createElement("div");
+    const appElement = document.createElement("eskit-window");
     appElement.className = "app";
     appElement.id = uuid;
-    appElement.textContent = `${appInstance.name} (${uuid})`;
+
+    this.rootElement.appendChild(appElement);
+    this.#appElements.set(uuid, appElement);
+
+    const shadowRoot = appElement.shadowRoot;
+
+    // header要素
+    const headerElement = shadowRoot.querySelector(".header");
+    headerElement.textContent = `${appInstance.name} (${uuid})`;
 
     // 閉じるボタン(仮)
     const closeButton = document.createElement("button");
@@ -33,10 +46,18 @@ export default class WindowSystem {
     closeButton.onclick = () => {
       this.system.killApp(uuid);
     };
-    appElement.appendChild(closeButton);
+    headerElement.appendChild(closeButton);
 
-    this.rootElement.appendChild(appElement);
-    this.#appElements.set(uuid, appElement);
+    // テンプレート
+    const templateElement = document.createElement("div");
+    templateElement.className = "app-template";
+    templateElement.innerHTML = appInstance.template;
+    shadowRoot.appendChild(templateElement);
+
+    // style
+    const styleSheet = new CSSStyleSheet();
+    styleSheet.replaceSync(appInstance.style);
+    shadowRoot.adoptedStyleSheets = [styleSheet];
   }
 
   /**
