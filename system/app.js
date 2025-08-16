@@ -1,4 +1,4 @@
-export default class App {
+export default class ESKitApp {
   constructor () {
     this.name = this.constructor.name || "(not_set)";
     this.template = this.constructor.template || "(no_template)";

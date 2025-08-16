@@ -1,6 +1,8 @@
-import ESKitWindowElement from "./elements/window.js";
+import ESKitDesktopElement from "./elements/desktop/main.js";
+import ESKitLauncherElement from "./elements/launcher/main.js";
+import ESKitWindowElement from "./elements/window/main.js";
 
-export default class WindowSystem {
+export default class ESKitWindowSystem {
   #appElements = new Map();
 
   constructor() {
@@ -8,12 +10,17 @@ export default class WindowSystem {
     if (!this.system) {
       throw new Error("Systemが初期化されていません");
     }
-    this.rootElement = document.createElement("div");
-    this.rootElement.id = "window-system";
-    document.body.appendChild(this.rootElement);
 
     // Custom Elementの登録
     customElements.define("eskit-window", ESKitWindowElement);
+    customElements.define("eskit-launcher", ESKitLauncherElement);
+    customElements.define("eskit-desktop", ESKitDesktopElement);
+
+    this.desktopElement = document.createElement("eskit-desktop");
+    document.body.appendChild(this.desktopElement);
+
+    const launcher = document.createElement("eskit-launcher");
+    this.desktopElement.appendChild(launcher);
   }
 
   /**
@@ -31,20 +38,20 @@ export default class WindowSystem {
     appElement.className = "app";
     appElement.id = uuid;
 
-    this.rootElement.appendChild(appElement);
+    this.desktopElement.appendChild(appElement);
     this.#appElements.set(uuid, appElement);
 
     const shadowRoot = appElement.shadowRoot;
 
     // header要素
-    const headerElement = shadowRoot.querySelector(".header");
+    const headerElement = shadowRoot.querySelector(".app-header");
     headerElement.textContent = `${appInstance.name} (${uuid})`;
 
     // 閉じるボタン(仮)
     const closeButton = document.createElement("button");
     closeButton.textContent = "x";
     closeButton.onclick = () => {
-      this.system.killApp(uuid);
+      this.system.closeApp(uuid);
     };
     headerElement.appendChild(closeButton);
 
@@ -58,7 +65,7 @@ export default class WindowSystem {
     if (appInstance.style) {
       const styleSheet = new CSSStyleSheet();
       styleSheet.replaceSync(appInstance.style);
-      shadowRoot.adoptedStyleSheets = [styleSheet];
+      shadowRoot.adoptedStyleSheets.push(styleSheet);
     }
   }
 
@@ -69,7 +76,7 @@ export default class WindowSystem {
   close (uuid) {
     const appElement = this.#appElements.get(uuid);
     if (appElement) {
-      this.rootElement.removeChild(appElement);
+      this.desktopElement.removeChild(appElement);
       this.#appElements.delete(uuid);
     }
   }
