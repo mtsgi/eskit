@@ -1,8 +1,6 @@
-import WindowSystem from "./window.js";
+import ESKitWindowSystem from "./window.js";
 
-import ESKitLauncherElement from "./elements/launcher.js";
-
-export default class System {
+export default class ESKitSystem {
   #process = new Map();
 
   constructor() {
@@ -13,18 +11,15 @@ export default class System {
     this.initUI();
 
     // ESKit Window System初期化
-    this.WindowSystem = new WindowSystem();
+    this.WindowSystem = new ESKitWindowSystem();
 
     // Custom Elementの登録
-    customElements.define("eskit-launcher", ESKitLauncherElement);
   }
 
   /**
    * ESKit UIの初期化
    */
   initUI () {
-    const launcher = document.createElement("eskit-launcher");
-    document.body.appendChild(launcher);
   }
 
   /**
@@ -48,7 +43,7 @@ export default class System {
    * アプリを終了する
    * @param {*} uuid 
    */
-  killApp (uuid) {
+  closeApp (uuid) {
     const appInstance = this.getApp(uuid);
     if (appInstance) {
       appInstance.close();

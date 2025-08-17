@@ -1,19 +1,13 @@
-import App from "system/app.js";
+import ESKitApp from "system/app.js";
 
-export default class TestApp extends App {
+import style from "./style.js";
+import template from "./template.js";
+
+export default class TestApp extends ESKitApp {
   constructor() {
     super();
     this.name = "TestApp";
-    this.template = `
-      <div>
-        <strong>Test Application</strong>
-        <div>This is a simple test application.</div>
-      </div>
-    `;
-    this.style = `
-      strong {
-        color: green;
-      }
-    `;
+    this.template = template;
+    this.style = style;
   }
 }

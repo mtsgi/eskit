@@ -1,0 +1,17 @@
+body {
+  margin: 0;
+  padding: 0;
+  width: 100dvw;
+  height: 100dvh;
+  color: var(--eskit-color-text);
+}
+
+:root {
+  --eskit-color-text: #333;
+  --eskit-color-background: #f0f0f0;
+  --eskit-color-border: #ccc;
+  --eskit-color-primary: #007bff;
+  --eskit-color-success: #28a745;
+  --eskit-color-error: #dc3545;
+  --eskit-color-warning: #ffc107;
+}

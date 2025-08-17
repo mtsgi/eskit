@@ -1,6 +1,6 @@
-import System from "./system/system.js";
+import ESKitSystem from "./system/system.js";
 
-const system = new System();
+const system = new ESKitSystem();
 
 // 仮で下記のアプリを読み込む
 system.loadApp("apps/test/main.js");

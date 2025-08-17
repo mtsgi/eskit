@@ -1,19 +1,13 @@
-import App from "system/app.js";
+import ESKitApp from "system/app.js";
 
-export default class WelcomeApp extends App {
+import style from "./style.js";
+import template from "./template.js";
+
+export default class WelcomeApp extends ESKitApp {
   constructor() {
     super();
     this.name = "WelcomeApp";
-    this.template = `
-      <div>
-        <strong>Welcome to ESKit</strong>
-        <div>This is a simple welcome application.</div>
-      </div>
-    `;
-    this.style = `
-      strong {
-        text-decoration: underline;
-      }
-    `;
+    this.template = template;
+    this.style = style;
   }
 }
