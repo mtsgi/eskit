@@ -72,10 +72,16 @@ apps/
 
 ### 3. アプリクラス (`main.js`)
 
+> **ES Modules に関する注意:** `index.html` は `type="module"` で動作するため、モジュール内では
+> `System` 識別子は自動的に解決されません。`window.System` / `globalThis.System` を直接参照するか、
+> ファイル先頭で `const System = globalThis.System;` を宣言してください。
+
 ```js
 import ESKitApp from "system/app.js";
 import template from "./template.js";
 import style from "./style.js";
+
+const System = globalThis.System;  // ES モジュール内では必須
 
 export default class MyApp extends ESKitApp {
   static template = template;

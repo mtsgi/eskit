@@ -125,13 +125,15 @@ export default class ESKitSystem {
 
     app.close();
     app._state = "closed";
+    // WindowSystem.close() が activeUuid をリセットする前に記録する
+    const wasActive = this.WindowSystem.activeUuid === uuid;
     this.WindowSystem.close(uuid);
     this.permissions.revoke(uuid);
     this.#process.delete(uuid);
     this.events.emit("app:closed", { uuid });
 
     // モバイルモードではアクティブアプリが閉じられたらドロワーを開く
-    if (this.shellMode.isMobile && this.WindowSystem.activeUuid === uuid) {
+    if (this.shellMode.isMobile && wasActive) {
       this.WindowSystem.drawer?.open();
     }
   }

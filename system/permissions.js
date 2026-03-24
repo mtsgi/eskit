@@ -136,12 +136,4 @@ export default class ESKitPermissions {
 
   /** シングルトンのダイアログ要素 */
   static #dialogElement = null;
-
-  static #escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
 }

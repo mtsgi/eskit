@@ -1,8 +1,6 @@
 import { css } from "system/util.js";
 
 export default css`
-  /* ─── desktop モード (default) ───────────────────────────── */
-
   /* ─── desktop モード (default) ─────────────────────────── */
 
   :host {

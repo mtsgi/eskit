@@ -2,6 +2,8 @@ import ESKitApp from "system/app.js";
 import style from "./style.js";
 import template from "./template.js";
 
+const System = globalThis.System;
+
 /**
  * System Verifier — ESKit システム機能の網羅的な検証アプリ
  *

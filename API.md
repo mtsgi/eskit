@@ -8,7 +8,13 @@
 
 `window.System` としてグローバルに公開される ESKitSystem のインスタンスです。
 
+> **Note (ES Modules):** `index.html` は `type="module"` で動作するため、モジュール内では
+> `window.System` / `globalThis.System` を直接参照するか、ファイル先頭で
+> `const System = globalThis.System;` を宣言してから使用してください。
+
 ```js
+const System = globalThis.System;
+
 await System.loadApp("apps/myapp/");         // アプリを起動 → UUID を返す
 System.closeApp(uuid);                        // アプリを終了
 System.getApp(uuid);                          // アプリインスタンスを取得
