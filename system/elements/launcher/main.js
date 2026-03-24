@@ -1,4 +1,5 @@
-import style from "./style.js";
+import style    from "./style.js";
+import template from "./template.js";
 
 export default class ESKitLauncherElement extends HTMLElement {
   constructor() {
@@ -11,10 +12,7 @@ export default class ESKitLauncherElement extends HTMLElement {
   }
 
   render() {
-    this.shadowRoot.innerHTML = `
-      <input type="text" id="launcher-app-path" value="apps/welcome/main.js">
-      <button id="launcher-load-app">Load</button>
-    `;
+    this.shadowRoot.innerHTML = template;
 
     const styleSheet = new CSSStyleSheet();
     styleSheet.replaceSync(style);

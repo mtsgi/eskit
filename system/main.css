@@ -14,4 +14,6 @@ body {
   --eskit-color-success: #28a745;
   --eskit-color-error: #dc3545;
   --eskit-color-warning: #ffc107;
+  --eskit-overlay-bg: rgba(0, 0, 0, 0.45);
+  --eskit-home-bar-height: 3.5rem;
 }

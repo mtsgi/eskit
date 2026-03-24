@@ -1,0 +1,8 @@
+{
+  "id": "eskit.welcome",
+  "name": "WelcomeApp",
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": "ようこそアプリ",
+  "permissions": []
+}
