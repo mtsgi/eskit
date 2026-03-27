@@ -1,7 +1,7 @@
 /**
  * ESKitFileSystem — IndexedDB ベースの仮想ファイルシステム
  *
- * データベース: "eskit-fs" (バージョン 2)
+ * データベース: "eskit-fs" (バージョン 1)
  * オブジェクトストア: "files"
  *   keyPath: "path"
  *   インデックス: "parent" (ディレクトリ一覧用)

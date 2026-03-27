@@ -3,8 +3,6 @@ import { css } from "system/util.js";
 export default css`
   /* ─── オーバーレイ (:host 自体が overlay) ──────────────────────────── */
 
-  /* ─── オーバーレイ ──────────────────────────────────────────── */
-
   :host {
     display: none;
     position: fixed;

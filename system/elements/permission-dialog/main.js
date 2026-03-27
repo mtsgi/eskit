@@ -76,10 +76,16 @@ export default class ESKitPermissionDialogElement extends HTMLElement {
     // });
 
     // Escape キーで拒否
-    this.addEventListener("keydown", e => {
-      if (e.key === "Escape") this.#finish(false);
-    });
+    document.addEventListener("keydown", this.#onKeyDown);
   }
+
+  disconnectedCallback() {
+    document.removeEventListener("keydown", this.#onKeyDown);
+  }
+
+  #onKeyDown = (e) => {
+    if (this.hasAttribute("open") && e.key === "Escape") this.#finish(false);
+  };
 
   #update(appName, permission) {
     const desc  = this.shadowRoot.getElementById("perm-desc");

@@ -46,7 +46,7 @@
 ### シェルモード (ESKitShellMode)
 
 - `window.matchMedia("(max-width: 768px)")` で自動検出
-- `System.setShellMode("mobile")` で手動上書き可能、`.shellMode.unlock()` で自動復帰
+- `globalThis.System.setShellMode("mobile")` で手動上書き可能、`.shellMode.unlock()` で自動復帰
 - モード変更時 → `"shell:mode-changed"` イベント → 全 Web Components が `mode` 属性を参照して自律的にレイアウト切替
 
 | | desktop モード | mobile モード |
