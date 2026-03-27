@@ -2,7 +2,7 @@ import { css } from "system/util.js";
 
 export default css`
   .runner {
-    font-size: 0.82rem;
+    font-size: var(--kit-font-size-xs);
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -11,31 +11,24 @@ export default css`
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.6rem;
-    border-bottom: 1px solid #313244;
+    gap: var(--kit-space-xs);
+    padding: var(--kit-space-xs) var(--kit-space-s);
+    border-bottom: 1px solid var(--eskit-color-border);
     flex-shrink: 0;
-  }
-
-  .toolbar button {
-    padding: 0.25rem 0.65rem;
-    cursor: pointer;
-    font-size: 0.78rem;
-    font-weight: 600;
   }
 
   .summary {
     margin-left: auto;
-    color: #a6adc8;
-    font-size: 0.78rem;
+    color: var(--kit-fg-secondary);
+    font-size: var(--kit-font-size-xs);
   }
-  .summary.ok   { color: #a6e3a1; }
-  .summary.fail { color: #f38ba8; }
+  .summary.ok   { color: var(--eskit-color-success); }
+  .summary.fail { color: var(--eskit-color-error); }
 
   .results {
     list-style: none;
     margin: 0;
-    padding: 0.25rem 0;
+    padding: var(--kit-space-xs) 0;
     overflow-y: auto;
     flex: 1;
   }
@@ -43,20 +36,20 @@ export default css`
   .result {
     display: grid;
     grid-template-columns: 1.2rem 1fr auto;
-    gap: 0.4rem;
+    gap: var(--kit-space-xs);
     align-items: baseline;
-    padding: 0.18rem 0.7rem;
+    padding: 0.18rem var(--kit-space-s);
   }
 
-  .result.pass .icon { color: #a6e3a1; }
-  .result.fail .icon { color: #f38ba8; }
-  .result.run  .icon { color: #fab387; }
+  .result.pass .icon { color: var(--eskit-color-success); }
+  .result.fail .icon { color: var(--eskit-color-error); }
+  .result.run  .icon { color: var(--eskit-color-warning); }
 
-  .result .name { font-weight: 500; }
+  .result .name { font-weight: var(--kit-font-weight-bold); }
 
   .result .detail {
-    font-size: 0.72rem;
-    color: #6c7086;
+    font-size: var(--kit-font-size-xs);
+    color: var(--kit-fg-tertiary);
     text-align: right;
     white-space: nowrap;
     overflow: hidden;
@@ -64,6 +57,6 @@ export default css`
     max-width: 160px;
   }
 
-  .result.fail .detail { color: #f38ba8; }
+  .result.fail .detail { color: var(--eskit-color-error); }
 `;
 

@@ -22,7 +22,8 @@ export default css`
   .dialog {
     background: var(--eskit-color-surface, var(--eskit-color-background));
     border: 1px solid var(--eskit-color-border);
-    padding: 1.5rem;
+    border-radius: var(--kit-radius-m);
+    padding: var(--kit-space-xl);
     min-width: 280px;
     max-width: min(90vw, 380px);
     color: var(--eskit-color-text);
@@ -31,17 +32,17 @@ export default css`
   /* ─── テキスト ──────────────────────────────────────────────── */
 
   .title {
-    margin: 0 0 0.5rem;
-    font-size: 1rem;
-    font-weight: 700;
+    margin: 0 0 var(--kit-space-s);
+    font-size: var(--kit-font-size-m);
+    font-weight: var(--kit-font-weight-bold);
     text-align: center;
   }
 
   .description {
-    margin: 0 0 0.75rem;
-    font-size: 0.88rem;
+    margin: 0 0 var(--kit-space-m);
+    font-size: var(--kit-font-size-s);
     text-align: center;
-    line-height: 1.5;
+    line-height: var(--kit-line-height-m);
     color: var(--eskit-color-text);
   }
 
@@ -51,41 +52,20 @@ export default css`
     display: block;
     background: var(--eskit-color-background);
     border: 1px solid var(--eskit-color-border);
+    border-radius: var(--kit-radius-s);
     color: var(--eskit-color-primary);
-    padding: 0.3rem 0.65rem;
-    font-size: 0.82rem;
-    font-family: ui-monospace, monospace;
+    padding: var(--kit-space-xs) var(--kit-space-m);
+    font-size: var(--kit-font-size-xs);
+    font-family: var(--kit-font-family-mono);
     text-align: center;
-    margin-bottom: 1.25rem;
+    margin-bottom: var(--kit-space-l);
   }
 
-  /* ─── ボタン ────────────────────────────────────────────────── */
+  /* ─── ボタンコンテナ ──────────────────────────────────────────────── */
 
   .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    gap: var(--kit-space-s);
   }
-
-  .btn {
-    font: inherit;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    text-align: center;
-  }
-
-  .btn-deny {
-    background: transparent;
-    border: 1px solid var(--eskit-color-border);
-    color: var(--eskit-color-text);
-  }
-
-  .btn-allow {
-    background: var(--eskit-color-primary);
-    border: 1px solid var(--eskit-color-primary);
-    color: var(--eskit-color-on-primary, #fff);
-  }
-
-  .btn-deny:hover  { background: var(--eskit-color-background); border-color: var(--eskit-color-text); }
-  .btn-allow:hover { opacity: 0.85; }
 `;

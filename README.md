@@ -9,6 +9,7 @@
 - **Web API 活用** — Popover API、View Transitions API、CSS Anchor Positioning など、最新の Web API を積極的に採用します
 - **Web Components** — Custom Elements と Shadow DOM を活用し、再利用可能な UI 部品を構築します
 - **ESKit FS** — OS のファイルシステムを IndexedDB 上に実装します
+- **kitstrap2** — CSS フレームワークを OS 全体に統合。2 層アーキテクチャ (グローバル `<link>` + Shadow DOM `adoptedStyleSheets` Singleton) でダークモード・テーマを自動反映します
 
 ## アーキテクチャ
 
@@ -146,7 +147,7 @@ export default css`
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | 🚧 実装中 |
+| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | 🛠️ 実装済み |
 | 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | 予定 |
 | 3 | デスクトップシェル (タスクバー / ランチャー / コンテキストメニュー) | 予定 |
 | 4 | システムサービス (通知 / テーマ / i18n / 設定アプリ) | 予定 |

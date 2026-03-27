@@ -5,8 +5,8 @@ export default html`
     <p class="description" id="perm-desc"></p>
     <code class="perm-badge" id="perm-badge"></code>
     <div class="actions">
-      <button class="btn btn-deny"  id="btn-deny">拒否</button>
-      <button class="btn btn-allow" id="btn-allow">許可</button>
+      <button class="btn btn-deny kit-button"  id="btn-deny">拒否</button>
+      <button class="btn btn-allow kit-button -primary" id="btn-allow">許可</button>
     </div>
   </div>
 `;
