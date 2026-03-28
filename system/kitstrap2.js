@@ -9,10 +9,20 @@
  *   this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, mySheet];
  */
 
-const res = await fetch(new URL("./kitstrap2.css", import.meta.url));
-const cssText = await res.text();
-
 const sheet = new CSSStyleSheet();
+let cssText = "";
+
+try {
+  const res = await fetch(new URL("./kitstrap2.css", import.meta.url));
+  if (res.ok) {
+    cssText = await res.text();
+  } else {
+    console.error(`Failed to load kitstrap2.css: ${res.status} ${res.statusText}`);
+  }
+} catch (err) {
+  console.error("Failed to load kitstrap2.css:", err);
+}
+
 await sheet.replace(cssText);
 
 export default sheet;

@@ -8,7 +8,7 @@ body {
 
 :root {
   /* ─── kitstrap2 CSS 変数ブリッジ ────────────────────── */
-  /* --eskit-* 変數を --kit-* にマッピングすることでダークモード・テーマを自動反映 */
+  /* --eskit-* 変数を --kit-* にマッピングすることでダークモード・テーマを自動反映 */
   --eskit-color-text:       var(--kit-fg);
   --eskit-color-background: var(--kit-bg-secondary);
   --eskit-color-surface:    var(--kit-bg);
