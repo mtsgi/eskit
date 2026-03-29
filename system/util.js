@@ -1,7 +1,7 @@
-export function css (strings) {
-  return strings.join("");
+export function css(strings, ...values) {
+  return strings.reduce((result, str, i) => result + str + (values[i] ?? ""), "");
 }
 
-export function html (strings) {
-  return strings.join("");
+export function html(strings, ...values) {
+  return strings.reduce((result, str, i) => result + str + (values[i] ?? ""), "");
 }

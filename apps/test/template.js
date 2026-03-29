@@ -1,8 +1,13 @@
 import { html } from "system/util.js";
 
 export default html`
-  <div>
-    <strong>Test Application</strong>
-    <div>This is a simple test application.</div>
+  <div class="runner">
+    <div class="toolbar">
+      <button id="btn-run" class="kit-button -primary -small">▶ Run All Tests</button>
+      <button id="btn-notify" class="kit-button -small">🔔 Test Notification</button>
+      <span id="summary" class="summary"></span>
+    </div>
+    <ol id="results" class="results"></ol>
   </div>
 `;
+

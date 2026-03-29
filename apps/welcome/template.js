@@ -1,8 +1,8 @@
 import { html } from "system/util.js";
 
 export default html`
-  <div>
+  <div class="kit-p-m">
     <strong>Welcome to ESKit</strong>
-    <div>This is a simple welcome application.</div>
+    <div class="kit-m-t-xs">This is a simple welcome application.</div>
   </div>
 `;
