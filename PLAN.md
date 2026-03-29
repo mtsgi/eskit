@@ -42,6 +42,9 @@
 | `apps/welcome/` | WelcomeApp — ようこそ画面 |
 | `README.md` | 日本語 README |
 | `API.md` | API リファレンス (README から分離) |
+| `system/kitstrap2.js` | Singleton CSSStyleSheet — kitstrap2 を Shadow DOM 全体に共有 |
+| `system/kitstrap2.css` | kitstrap2 CSS フレームワーク本体 |
+| `system/main.css` | `--eskit-*` → `var(--kit-*)` CSS 変数ブリッジ |
 
 ### シェルモード (ESKitShellMode)
 
@@ -164,30 +167,66 @@ hide(): void
 
 ## Phase 4: System Services — システムサービス
 
-**目的:** 通知、テーマエンジン、i18n、設定アプリの基盤サービスを実装する。  
-**完了条件:** テーマ切替で UI 全体が即座に変わり、通知が表示・自動消去され、言語切替が反映される。
+**目的:** テーマシステム、通知、i18n、設定アプリの基盤サービスを実装する。  
+**完了条件:** 組み込み・外部テーマの切替で OS 全体の見た目が即座に変わり、通知が表示・自動消去され、言語切替が反映される。
 
 ### `system/theme.js` — テーマエンジン (新規)
 
-```js
-class ESKitTheme {
-  static PRESETS: Record<string, Record<string, string>>  // "light", "dark"
-  current: string
-  presets: string[]
-  apply(name: string, customVars?: Record<string, string>): void
-  setWallpaper(value: string): void
+**設計基盤:** kitstrap2 の CSS 変数システム上に構築する。`system/main.css` で `--eskit-*` 変数を `var(--kit-*)` にブリッジ済みのため、`--kit-*` 変数を上書きするだけで Shadow DOM を含む全要素に即時反映される。
+
+**テーマファイル形式 (`system/themes/*.json`):**
+
+```json
+{
+  "id": "catppuccin-mocha",
+  "name": "Catppuccin Mocha",
+  "author": "Catppuccin",
+  "dark": true,
+  "vars": {
+    "--kit-color-primary": "#cba6f7",
+    "--kit-fg":            "#cdd6f4",
+    "--kit-bg":            "#1e1e2e",
+    "--kit-bg-secondary":  "#181825"
+  },
+  "wallpaper": "linear-gradient(135deg, #1e1e2e, #181825)"
 }
 ```
-- CSS カスタムプロパティ (`document.documentElement.style.setProperty`)
-- `localStorage` で永続化
-- 壁紙: `--eskit-wallpaper` CSS 変数
 
-**CSS 変数一覧 (拡張):**
+**API:**
+
+```js
+class ESKitTheme {
+  get current(): string                // 現在のテーマ ID
+  get list(): ThemeMeta[]              // 利用可能なテーマ一覧
+  apply(id: string): void              // 組み込みテーマを適用
+  applyVars(
+    vars: Record<string, string>,
+    dark?: boolean
+  ): void                              // 変数セットを直接適用 (カスタムテーマ)
+  async load(url: string): Promise<ThemeMeta>  // 外部 URL から theme.json を fetch・登録
+  reset(): void                        // システムデフォルトに戻す
+  setWallpaper(value: string): void    // 壁紙 CSS 値 (url() / gradient)
+  export(): string                     // 現在のテーマを JSON 文字列でエクスポート
+}
 ```
---eskit-color-text         --eskit-color-background    --eskit-color-border
---eskit-color-primary      --eskit-color-success       --eskit-color-error
---eskit-color-warning      --eskit-wallpaper
-```
+
+- 組み込みテーマ: `system/themes/` 以下に JSON で同梱 (最低 `light.json` / `dark.json`)
+- `localStorage` にテーマ ID とカスタム vars を永続化。起動時に自動復元
+- 適用時に `system:theme-changed` イベントを発行
+- 壁紙: `--eskit-wallpaper` CSS 変数 → `eskit-desktop` の `background` に反映
+
+**外部テーマのインポートフロー (`System.theme.load(url)`):**
+
+1. URL を受け取り `theme.json` を fetch
+2. JSON スキーマバリデーション (必須: `id`, `name`, `vars`)
+3. ユーザー確認ダイアログ: テーマ名・作者・変更変数数を提示
+4. `applyVars()` で即時適用 → `localStorage` に保存
+5. `ThemeMeta` を返却 (リストに追加)
+
+**セキュリティ:**
+- HTTPS URL のみ許可 (`http://` は即拒否)
+- `vars` のキーは `--kit-*` または `--eskit-*` のみ許可 (任意プロパティ注入を防止)
+- 外部テーマ読み込みには設定アプリ経由のユーザー操作を必須とする
 
 ### `system/i18n.js` — 多言語対応 (新規)
 
@@ -214,7 +253,7 @@ class ESKitI18n {
 ### `apps/settings/` — 設定アプリ (新規)
 
 タブ構成:
-- **外観:** テーマプリセット選択・壁紙グリッド (6 種)
+- **外観:** 組み込みテーマ選択グリッド・URL からテーマをインポート (`System.theme.load`)・壁紙グリッド (6 種)・現在のテーマを JSON でエクスポート
 - **言語:** `System.i18n.available` からドロップダウン選択
 - **システム:** 実行中プロセス数・登録アプリ数
 - **権限:** インストール済みアプリの権限一覧 + 個別取り消し UI
@@ -260,7 +299,7 @@ class ESKitI18n {
 | イベント | ペイロード | 発行タイミング |
 |---------|----------|--------------|
 | `system:ready` | — | ブート完了 |
-| `system:theme-changed` | `{ name }` | テーマ変更 |
+| `system:theme-changed` | `{ id, vars }` | テーマ変更 |
 | `system:locale-changed` | `{ lang }` | 言語変更 |
 | `app:opened` | `{ uuid, name }` | アプリ起動 |
 | `app:closed` | `{ uuid }` | アプリ終了 |
@@ -308,7 +347,12 @@ system/
   app.js
   system.js
   window.js
+  kitstrap2.js          (実装済み)
+  kitstrap2.css         (実装済み)
   theme.js              (Phase 4)
+  themes/               (Phase 4)
+    light.json
+    dark.json
   i18n.js               (Phase 4)
   i18n/
     ja.json             (Phase 4)

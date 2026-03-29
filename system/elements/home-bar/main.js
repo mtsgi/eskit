@@ -1,5 +1,6 @@
 import style    from "./style.js";
 import template from "./template.js";
+import kitstrap2Sheet from "system/kitstrap2.js";
 
 /**
  * ESKitHomeBarElement — モバイルモード用ホームバー
@@ -49,7 +50,7 @@ export default class ESKitHomeBarElement extends HTMLElement {
   #adoptStyle() {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(style);
-    this.shadowRoot.adoptedStyleSheets = [sheet];
+    this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, sheet];
   }
 
   // ─── イベント ──────────────────────────────────────────────────────────

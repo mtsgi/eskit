@@ -32,32 +32,22 @@ export default css`
     display: grid;
     grid-template-columns: 1fr auto;
     align-items: center;
-    padding: 0.4rem 0.6rem;
+    padding: var(--kit-space-xs) var(--kit-space-s);
     background: var(--eskit-color-surface, var(--eskit-color-background));
     border-bottom: 1px solid var(--eskit-color-border);
     flex-shrink: 0;
   }
 
   .app-title {
-    font-size: 0.9rem;
-    font-weight: 600;
+    font-size: var(--kit-font-size-s);
+    font-weight: var(--kit-font-weight-bold);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   :host([mode="mobile"]) .app-header {
-    padding: 0.75rem 1rem;
-  }
-
-  .btn-close {
-    background: var(--eskit-color-error);
-    border: none;
-    padding: 0.25rem 0.5rem;
-    color: var(--eskit-color-on-error, #fff);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.8rem;
+    padding: var(--kit-space-m) var(--kit-space-l);
   }
 
   /* ─── アプリコンテンツ領域 ───────────────────────────────── */

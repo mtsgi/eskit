@@ -11,9 +11,9 @@ export default css`
     z-index: 150;
     background: var(--eskit-color-surface, var(--eskit-color-background));
     border-top: 1px solid var(--eskit-color-border);
-    padding: 0 1rem;
+    padding: 0 var(--kit-space-l);
     align-items: center;
-    gap: 0.75rem;
+    gap: var(--kit-space-m);
     user-select: none;
     -webkit-user-select: none;
   }
@@ -24,32 +24,10 @@ export default css`
 
   /* ─── ホームボタン ─────────────────────────────────────────── */
 
-  .home-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    width: 2rem;
-    height: 2rem;
-    border: 1px solid var(--eskit-color-border);
-    background: transparent;
-    color: var(--eskit-color-text);
-    cursor: pointer;
-    font: inherit;
-  }
-
-  .home-btn:hover,
-  .home-btn:focus-visible {
-    outline: none;
-    background: var(--eskit-color-primary);
-    border-color: var(--eskit-color-primary);
-    color: var(--eskit-color-on-primary, #fff);
-  }
-
   /* ─── アクティブアプリ名 ────────────────────────────────────── */
 
   .current-app {
-    font-size: 0.9rem;
+    font-size: var(--kit-font-size-s);
     font-weight: 500;
     flex: 1;
     overflow: hidden;

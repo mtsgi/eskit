@@ -1,5 +1,6 @@
 import style    from "./style.js";
 import template from "./template.js";
+import kitstrap2Sheet from "system/kitstrap2.js";
 
 /**
  * ESKitPermissionDialogElement — 権限確認ダイアログ
@@ -63,7 +64,7 @@ export default class ESKitPermissionDialogElement extends HTMLElement {
   #adoptStyle() {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(style);
-    this.shadowRoot.adoptedStyleSheets = [sheet];
+    this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, sheet];
   }
 
   #bindEvents() {

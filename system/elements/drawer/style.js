@@ -43,20 +43,21 @@ export default css`
     width: 2.5rem;
     height: 0.25rem;
     background: var(--eskit-color-border);
+    border-radius: var(--kit-radius-full);
   }
 
   /* ─── セクション ─────────────────────────────────────────────── */
 
   .section {
-    padding: 0.75rem 1rem 0;
+    padding: var(--kit-space-m) var(--kit-space-l) 0;
   }
 
   .section-header {
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: var(--kit-font-size-xs);
+    font-weight: var(--kit-font-weight-bold);
     text-transform: uppercase;
     color: var(--eskit-color-text-muted, var(--eskit-color-border));
-    margin: 0 0 0.5rem;
+    margin: 0 0 var(--kit-space-s);
   }
 
   /* ─── リスト / グリッド ──────────────────────────────────────── */
@@ -64,13 +65,13 @@ export default css`
   .app-list {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: var(--kit-space-xs);
   }
 
   .app-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(5rem, 1fr));
-    gap: 0.5rem;
+    gap: var(--kit-space-s);
   }
 
   /* ─── アプリカード ───────────────────────────────────────────── */
@@ -78,10 +79,11 @@ export default css`
   .app-card {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--kit-space-s);
     background: transparent;
     border: 1px solid var(--eskit-color-border);
-    padding: 0.5rem 0.75rem;
+    border-radius: var(--kit-radius-s);
+    padding: var(--kit-space-s) var(--kit-space-m);
     font: inherit;
     cursor: pointer;
     text-align: left;
@@ -92,8 +94,8 @@ export default css`
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 0.25rem;
-    padding: 0.5rem;
+    gap: var(--kit-space-xs);
+    padding: var(--kit-space-s);
     min-height: 4.5rem;
   }
 
@@ -112,21 +114,21 @@ export default css`
   }
 
   .app-name {
-    font-size: 0.85rem;
+    font-size: var(--kit-font-size-s);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .grid-card .app-name {
-    font-size: 0.72rem;
+    font-size: var(--kit-font-size-xs);
     text-align: center;
     white-space: normal;
     overflow: visible;
   }
 
   .empty-message {
-    font-size: 0.85rem;
+    font-size: var(--kit-font-size-s);
     color: var(--eskit-color-text-muted, var(--eskit-color-border));
   }
 `;

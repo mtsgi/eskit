@@ -1,5 +1,6 @@
 import style from "./style.js";
 import template from "./template.js";
+import kitstrap2Sheet from "system/kitstrap2.js";
 
 /**
  * ESKitDesktopElement — デスクトップルート要素
@@ -30,6 +31,6 @@ export default class ESKitDesktopElement extends HTMLElement {
 
     const styleSheet = new CSSStyleSheet();
     styleSheet.replaceSync(style);
-    this.shadowRoot.adoptedStyleSheets = [styleSheet];
+    this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, styleSheet];
   }
 }

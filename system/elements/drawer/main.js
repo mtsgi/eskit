@@ -1,5 +1,6 @@
 import style from "./style.js";
 import template from "./template.js";
+import kitstrap2Sheet from "system/kitstrap2.js";
 
 /**
  * ESKitDrawerElement — アプリドロワー
@@ -118,7 +119,7 @@ export default class ESKitDrawerElement extends HTMLElement {
   #adoptStyle() {
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(style);
-    this.shadowRoot.adoptedStyleSheets = [sheet];
+    this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, sheet];
   }
 
   /** XSS 対策: テキストをエスケープして innerHTML に安全に挿入する */

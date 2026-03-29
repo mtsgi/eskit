@@ -3,17 +3,23 @@ body {
   padding: 0;
   width: 100dvw;
   height: 100dvh;
-  color: var(--eskit-color-text);
+  background-color: var(--eskit-color-background);
 }
 
 :root {
-  --eskit-color-text: #333;
-  --eskit-color-background: #f0f0f0;
-  --eskit-color-border: #ccc;
-  --eskit-color-primary: #007bff;
-  --eskit-color-success: #28a745;
-  --eskit-color-error: #dc3545;
-  --eskit-color-warning: #ffc107;
-  --eskit-overlay-bg: rgba(0, 0, 0, 0.45);
-  --eskit-home-bar-height: 3.5rem;
+  /* ─── kitstrap2 CSS 変数ブリッジ ────────────────────── */
+  /* --eskit-* 変数を --kit-* にマッピングすることでダークモード・テーマを自動反映 */
+  --eskit-color-text:       var(--kit-fg);
+  --eskit-color-background: var(--kit-bg-secondary);
+  --eskit-color-surface:    var(--kit-bg);
+  --eskit-color-border:     var(--kit-border-color);
+  --eskit-color-primary:    var(--kit-color-primary);
+  --eskit-color-on-primary: var(--kit-color-primary-fg);
+  --eskit-color-success:    var(--kit-color-success);
+  --eskit-color-error:      var(--kit-color-danger);
+  --eskit-color-warning:    var(--kit-color-warning);
+  --eskit-color-text-muted: var(--kit-fg-secondary);
+  /* ─── ESKit 固有変数 (kit 対応なし) ──────────────── */
+  --eskit-overlay-bg:        rgba(0, 0, 0, 0.45);
+  --eskit-home-bar-height:   3.5rem;
 }
