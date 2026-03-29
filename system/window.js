@@ -3,6 +3,7 @@ import ESKitLauncherElement  from "./elements/launcher/main.js";
 import ESKitWindowElement    from "./elements/window/main.js";
 import ESKitDrawerElement    from "./elements/drawer/main.js";
 import ESKitHomeBarElement   from "./elements/home-bar/main.js";
+import ESKitTaskbarElement   from "./elements/taskbar/main.js";
 
 /**
  * ESKitWindowSystem — ウィンドウ・シェル要素の管理
@@ -31,13 +32,18 @@ export default class ESKitWindowSystem {
     customElements.define("eskit-desktop",  ESKitDesktopElement);
     customElements.define("eskit-drawer",   ESKitDrawerElement);
     customElements.define("eskit-home-bar", ESKitHomeBarElement);
+    customElements.define("eskit-taskbar",  ESKitTaskbarElement);
 
     // ─── シェル要素の構築 ──────────────────────────────────────────────
 
     this.desktopElement = document.createElement("eskit-desktop");
     document.body.appendChild(this.desktopElement);
 
-    // Launcher (dev tool — desktop モードで表示)
+    // Taskbar (desktop モードで表示 — 画面下部固定)
+    this.taskbar = document.createElement("eskit-taskbar");
+    this.desktopElement.appendChild(this.taskbar);
+
+    // Launcher (desktop モードでオーバーレイ表示)
     this.launcher = document.createElement("eskit-launcher");
     this.desktopElement.appendChild(this.launcher);
 
@@ -182,7 +188,8 @@ export default class ESKitWindowSystem {
   #applyMode(mode) {
     // デスクトップ要素
     this.desktopElement.setAttribute("mode", mode);
-    // ランチャー・ホームバー (それぞれの CSS が :host([mode="?"]) で表示/非表示)
+    // シェル要素 (それぞれの CSS が :host([mode="?"]) で表示/非表示)
+    this.taskbar.setAttribute("mode", mode);
     this.launcher.setAttribute("mode", mode);
     this.homeBar.setAttribute("mode", mode);
 
@@ -194,6 +201,7 @@ export default class ESKitWindowSystem {
     // mobile → desktop 切替時: すべてのウィンドウを visible に戻す
     if (mode === "desktop") {
       this.drawer.close();
+      this.launcher.hide();
       for (const [, win] of this.#appElements) {
         win.removeAttribute("active");
       }

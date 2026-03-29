@@ -22,4 +22,5 @@ body {
   /* ─── ESKit 固有変数 (kit 対応なし) ──────────────── */
   --eskit-overlay-bg:        rgba(0, 0, 0, 0.45);
   --eskit-home-bar-height:   3.5rem;
+  --eskit-taskbar-height:    48px;
 }

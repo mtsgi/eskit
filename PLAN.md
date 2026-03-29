@@ -34,7 +34,8 @@
 | `system/window.js` | ESKitWindowSystem — モード対応ウィンドウ管理 |
 | `system/elements/desktop/` | `eskit-desktop` — デスクトップルート要素 |
 | `system/elements/window/` | `eskit-window` — アプリウィンドウ (desktop/mobile 対応) |
-| `system/elements/launcher/` | `eskit-launcher` — デスクトップモード用 dev ランチャー |
+| `system/elements/launcher/` | `eskit-launcher` — デスクトップモード用ランチャー (グリッド UI + 検索) |
+| `system/elements/taskbar/` | `eskit-taskbar` — デスクトップモード用タスクバー (ランチャーボタン・アプリ一覧・時計) |
 | `system/elements/drawer/` | `eskit-drawer` — モバイル用アプリドロワー |
 | `system/elements/home-bar/` | `eskit-home-bar` — モバイル用ホームバー |
 | `system/elements/permission-dialog/` | `eskit-permission-dialog` — 権限確認ダイアログ (Web Component) |
@@ -55,9 +56,10 @@
 | | desktop モード | mobile モード |
 |--|---------------|--------------|
 | ウィンドウ | カード形式 (縦スクロール) | アクティブのみ全画面 |
-| 別アプリ切替 | 常時表示 | ドロワーから選択 |
+| 別アプリ切替 | タスクバーから選択 | ドロワーから選択 |
 | アプリを閉じる | カード消去 | ドロワーが自動で開く |
-| ランチャー | 上部バー (入力) | 非表示 |
+| タスクバー | 固定下部 (ランチャーボタン・アプリ一覧・時計) | 非表示 |
+| ランチャー | オーバーレイ (グリッド + 検索) | 非表示 |
 | ホームバー | 非表示 | 固定下部 |
 | ドロワー | 非表示 | ホームボタンで開閉 |
 
@@ -123,27 +125,10 @@ class ESKitWindowElement extends HTMLElement {
 
 ## Phase 3: Desktop Shell — シェル UI
 
-**目的:** タスクバー、ランチャー UI 刷新、コンテキストメニューでデスクトップ OS の外観を実現する。  
-**完了条件:** ランチャーからアプリを選択起動でき、タスクバーでアプリ一覧・切り替えができる。
+**目的:** コンテキストメニュー・スポットライト検索・クイック設定・ウィンドウアニメーションを追加し、モダン OS らしいシェル体験を実現する。  
+**完了条件:** 右クリックメニュー・Ctrl+Space 検索・クイック設定パネル・ウィンドウ開閉アニメーションが動作する。
 
-### `system/elements/taskbar/` (新規)
-
-**ESKitTaskbarElement:**
-- 固定下部バー (height: 48px, z-index: 9999)
-- ランチャーボタン (☰) → `System.events.emit("launcher:toggle")`
-- アプリリスト: `System.listProcesses()` をイベント購読で更新
-- システムトレイ: 時計 (10 秒更新 `setInterval`)
-- デスクトップモード専用 (`:host([mode="mobile"]) { display: none }`)
-
-### `system/elements/launcher/` — UI 刷新
-
-**ESKitLauncherElement 変更:**  
-テキスト入力式 → グリッド UI (`[open]` 属性で表示)
-- `show()` / `hide()` / `toggle()` メソッド
-- `System.registry.list()` からアプリグリッド生成
-- 検索 `<input>` → `System.registry.search(query)` でフィルタリング
-- オーバーレイクリックで `hide()`
-- `launcher:toggle` イベントを購読
+> **Note:** タスクバー (`eskit-taskbar`) とランチャー UI 刷新 (`eskit-launcher`) は Phase 1 で実装済み。
 
 ### `system/elements/context-menu/` (新規)
 
@@ -153,15 +138,59 @@ show(x: number, y: number, items: MenuItem[]): void
 hide(): void
 // MenuItem: { label: string, action: () => void } | { separator: true }
 ```
-- デスクトップ右クリックでデフォルトメニュー表示
+- デスクトップ右クリックでデフォルトメニューを表示:
+  - 「ランチャーを開く」→ `launcher:toggle` 発行
+  - 「シェルモード切替」→ `System.setShellMode()`
+  - 区切り線 + 将来の拡張 (壁紙変更・設定を開く 等)
 - `contextmenu` イベントを `window.js` の `#initContextMenu()` でハンドル
+- Popover API で表示 (`popover="manual"`)、画面端でポジション自動補正
+- 他クリック (`pointerdown` outside) / Escape キーで `hide()`
+
+### `system/elements/spotlight/` (新規)
+
+**ESKitSpotlightElement** — グローバル検索オーバーレイ:
+```js
+show(): void
+hide(): void
+// Ctrl+Space / Cmd+Space でトグル
+```
+- `position: fixed; inset: 0; z-index: 20000` のオーバーレイ
+- 上部中央に検索バー (`<input>`) を配置。フォーカス自動付与
+- `System.registry.search(query)` でアプリ候補をリアルタイム表示
+- 候補クリック → `System.loadApp(manifest._dir)` → `hide()`
+- Enter キーで最上位候補を起動
+- `keydown` を `window` でキャプチャ: `Ctrl+Space` でトグル、`Escape` で閉じる
+- 将来的に VFS ファイル検索も統合 (Phase 5)
+
+### `system/elements/quick-settings/` (新規)
+
+**ESKitQuickSettingsElement** — タスクバーのシステムトレイから展開するパネル:
+```js
+show(anchorEl: HTMLElement): void
+hide(): void
+toggle(anchorEl: HTMLElement): void
+```
+- CSS Anchor Positioning で時計ボタンの直上に `position-area: top span-right` 配置
+- パネル内容:
+  - **シェルモード:** desktop / mobile の切替トグル
+  - **明暗テーマ:** OS に連動 (`prefers-color-scheme`) / ライト / ダーク の 3 択 (Phase 4 テーマ実装後に有効化)
+  - **システム情報:** 起動中プロセス数、FS 使用量 (Phase 4 連携)
+- `ESKitTaskbarElement` が時計要素 (`#clock`) のクリックイベントで `toggle()` を呼ぶ
+- 外側クリック / Escape で `hide()`
+
+### ウィンドウ開閉アニメーション
+
+**`system/elements/window/style.js` 追加:**
+- `@starting-style` + `transition` でウィンドウのスケール・フェードイン (`scale(0.92)` → `scale(1)`)
+- `prefers-reduced-motion: reduce` でアニメーション無効化 (アクセシビリティ)
 
 ### `system/system.js` — `initUI()` 実装
 
-- タスクバー・ランチャー・コンテキストメニューの初期化
+- コンテキストメニュー・スポットライト・クイック設定の初期化
+- グローバルキーバインド (`Ctrl+Space`) の登録
 - `system:ready` イベント後に実行
 
-**関連ファイル:** `system/elements/taskbar/main.js`, `style.js` (新規), `system/elements/launcher/main.js`, `style.js` (変更), `system/elements/context-menu/main.js`, `style.js` (新規)
+**関連ファイル:** `system/elements/context-menu/main.js`, `style.js` (新規), `system/elements/spotlight/main.js`, `style.js` (新規), `system/elements/quick-settings/main.js`, `style.js` (新規), `system/elements/window/style.js` (変更), `system/elements/desktop/main.js` (変更), `system/elements/taskbar/main.js` (変更), `system/system.js` (変更)
 
 ---
 
@@ -364,8 +393,10 @@ system/
     drawer/
     home-bar/
     permission-dialog/
-    taskbar/            (Phase 3)
+    taskbar/            (実装済み)
     context-menu/       (Phase 3)
+    spotlight/          (Phase 3)
+    quick-settings/     (Phase 3)
     notification/       (Phase 4)
 apps/
   test/
