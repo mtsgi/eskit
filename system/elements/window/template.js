@@ -1,7 +1,19 @@
 import { html } from "system/util.js";
 export default html`
+  <div class="resize-handle resize-n"></div>
+  <div class="resize-handle resize-s"></div>
+  <div class="resize-handle resize-e"></div>
+  <div class="resize-handle resize-w"></div>
+  <div class="resize-handle resize-ne"></div>
+  <div class="resize-handle resize-nw"></div>
+  <div class="resize-handle resize-se"></div>
+  <div class="resize-handle resize-sw"></div>
   <div class="app-header">
     <span class="app-title"></span>
-    <button class="btn-close kit-button -danger -small" title="閉じる">✕</button>
+    <div class="app-controls">
+      <button class="btn-minimize" title="最小化">–</button>
+      <button class="btn-maximize" title="最大化">□</button>
+      <button class="btn-close" title="閉じる">✕</button>
+    </div>
   </div>
 `;

@@ -65,10 +65,11 @@
 
 ---
 
-## Phase 2: Window Management — ウィンドウ管理
+## Phase 2: Window Management — ウィンドウ管理 ✅
 
 **目的:** デスクトップ OS らしいウィンドウ操作を実現する。  
-**完了条件:** 複数ウィンドウのドラッグ・リサイズ・最小化・最大化・復元・スナップ・Z-order が動作する。
+**完了条件:** 複数ウィンドウのドラッグ・リサイズ・最小化・最大化・復元・スナップ・Z-order が動作する。  
+**ステータス:** 実装済み
 
 ### `system/elements/window/main.js` — ESKitWindowElement 強化
 

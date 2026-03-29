@@ -38,6 +38,7 @@ export default css`
   /* ─── ヘッダー (検索) ──────────────────────────────────────── */
 
   .launcher-header {
+    display: flex;
     padding: var(--kit-space-m);
     border-bottom: 1px solid var(--eskit-color-border);
   }
