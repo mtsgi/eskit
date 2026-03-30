@@ -158,6 +158,7 @@ export default class ESKitSystem {
     if (!app) return;
 
     app.close();
+    app._hamonScope?.dispose();
     app._state = "closed";
     // WindowSystem.close() が activeUuid をリセットする前に記録する
     const wasActive = this.WindowSystem.activeUuid === uuid;

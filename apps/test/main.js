@@ -1,6 +1,6 @@
 import ESKitApp from "system/app.js";
+import hamon, { signal, list } from "system/hamon.js";
 import style from "./style.js";
-import template from "./template.js";
 
 const System = globalThis.System;
 
@@ -15,21 +15,53 @@ const System = globalThis.System;
  *   - ESKitApp API (setTitle / querySelector / querySelectorAll)
  */
 export default class SystemVerifier extends ESKitApp {
-  static template = template;
   static style    = style;
 
-  #ipcReceived = false;
-  #results     = [];
-  #listEl      = null;
-  #summaryEl   = null;
+  #ipcReceived    = false;
+  #results        = [];
+  #resultItems    = signal([]);
+  #summaryText    = signal("");
+  #summaryClass   = signal("");
+
+  constructor() {
+    super();
+    this.name     = "SystemVerifier";
+    this.template = hamon`
+      <div class="runner">
+        <div class="toolbar">
+          <button @click=${() => this.#runAll()} class="kit-button -primary -small">▶ Run All Tests</button>
+          <button @click=${() => this.#testNotify()} class="kit-button -small">🔔 Test Notification</button>
+          <span :class=${() => `summary ${this.#summaryClass.value}`}>${() => this.#summaryText.value}</span>
+        </div>
+        <ol id="results" class="results">
+          ${list(
+            () => this.#resultItems.value,
+            (item) => {
+              if (item.type === "section") {
+                const li = document.createElement("li");
+                li.className = "section-header";
+                li.textContent = item.label;
+                return li;
+              }
+              return hamon`
+                <li :class=${() => {
+                  const { pass } = item.state.value;
+                  return `result ${pass === null ? "run" : pass ? "pass" : "fail"}`;
+                }}>
+                  <span class="icon">${() => { const { pass } = item.state.value; return pass === null ? "⏳" : pass ? "✅" : "❌"; }}</span>
+                  <span class="name">${item.name}</span>
+                  <span class="detail">${() => item.state.value.detail ?? ""}</span>
+                </li>
+              `;
+            },
+          )}
+        </ol>
+      </div>
+    `;
+  }
 
   initialize() {
     this.setTitle("System Verifier");
-    this.#listEl    = this.querySelector("#results");
-    this.#summaryEl = this.querySelector("#summary");
-
-    this.querySelector("#btn-run").addEventListener("click", () => this.#runAll());
-    this.querySelector("#btn-notify").addEventListener("click", () => this.#testNotify());
   }
 
   onMessage(data) {
@@ -41,9 +73,9 @@ export default class SystemVerifier extends ESKitApp {
 
   async #runAll() {
     this.#results = [];
-    this.#listEl.innerHTML = "";
-    this.#summaryEl.textContent = "Running…";
-    this.#summaryEl.className   = "summary";
+    this.#resultItems.value  = [];
+    this.#summaryText.value  = "Running…";
+    this.#summaryClass.value = "";
     this.#ipcReceived = false;
 
     await this.#runSection("EventBus", [
@@ -297,9 +329,9 @@ export default class SystemVerifier extends ESKitApp {
 
   async #testQuerySelector() {
     await this.#test("ESKitApp: querySelector()", () => {
-      const btn = this.querySelector("#btn-run");
-      this.#assert(btn !== null, "element not found");
-      this.#assert(btn.id === "btn-run", `id=${btn.id}`);
+      const el = this.querySelector("#results");
+      this.#assert(el !== null, "element not found");
+      this.#assert(el.id === "results", `id=${el.id}`);
     });
   }
 
@@ -324,39 +356,25 @@ export default class SystemVerifier extends ESKitApp {
   // ─── UI ヘルパー ──────────────────────────────────────────────────────────
 
   #appendSectionHeader(label) {
-    const li = document.createElement("li");
-    li.style.cssText =
-      "padding:0.2rem 0.7rem;font-size:0.7rem;font-weight:700;" +
-      "letter-spacing:0.05em;text-transform:uppercase;" +
-      "list-style:none;";
-    li.textContent = label;
-    this.#listEl.appendChild(li);
+    this.#resultItems.value = [...this.#resultItems.value, { type: "section", label }];
   }
 
   #appendResult(name, pass, detail) {
-    const li = document.createElement("li");
-    li.className = `result ${pass === null ? "run" : pass ? "pass" : "fail"}`;
-    li.innerHTML = `
-      <span class="icon">${pass === null ? "⏳" : pass ? "✅" : "❌"}</span>
-      <span class="name">${name}</span>
-      <span class="detail">${detail ?? ""}</span>
-    `;
-    this.#listEl.appendChild(li);
-    return li;
+    const item = { type: "result", name, state: signal({ pass, detail }) };
+    this.#resultItems.value = [...this.#resultItems.value, item];
+    return item;
   }
 
-  #updateResult(li, pass, detail) {
-    li.className = `result ${pass ? "pass" : "fail"}`;
-    li.querySelector(".icon").textContent  = pass ? "✅" : "❌";
-    li.querySelector(".detail").textContent = detail;
+  #updateResult(item, pass, detail) {
+    item.state.value = { pass, detail };
   }
 
   #updateSummary() {
     const total  = this.#results.length;
     const passed = this.#results.filter(Boolean).length;
     const failed = total - passed;
-    this.#summaryEl.textContent = `${passed}/${total} passed${failed > 0 ? ` · ${failed} failed` : ""}`;
-    this.#summaryEl.className   = `summary ${failed > 0 ? "fail" : "ok"}`;
+    this.#summaryText.value  = `${passed}/${total} passed${failed > 0 ? ` · ${failed} failed` : ""}`;
+    this.#summaryClass.value = failed > 0 ? "fail" : "ok";
   }
 }
 

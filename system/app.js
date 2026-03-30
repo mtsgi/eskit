@@ -21,6 +21,8 @@ export default class ESKitApp {
   _manifest      = null;
   _state         = "initializing";
   _windowElement = null;
+  /** @type {import('./hamon.js').HamonScope|null} Hamon スコープ (テンプレートまたは手動で設定) */
+  _hamonScope    = null;
 
   constructor() {
     this.name     = this.constructor.name     || "(not_set)";
@@ -98,5 +100,26 @@ export default class ESKitApp {
     }
     system.notify(opts);
   }
+
+  /**
+   * Hamon スコープを取得する。初回アクセス時に遅延生成される。
+   * @returns {import('./hamon.js').HamonScope}
+   */
+  get hamon() {
+    if (!this._hamonScope) {
+      // 遅延 import を避けるため、HamonScope を動的に生成
+      // (system/hamon.js が読み込み済みならグローバルキャッシュから取得)
+      this._hamonScope = new (globalThis.__HamonScope ?? _FallbackScope)();
+    }
+    return this._hamonScope;
+  }
 }
 
+/** HamonScope が読み込まれていない場合のフォールバック (互換用) */
+class _FallbackScope {
+  signal()   { throw new Error("Hamon is not loaded. Import 'system/hamon.js' first."); }
+  computed() { throw new Error("Hamon is not loaded. Import 'system/hamon.js' first."); }
+  effect()   { return () => {}; }
+  dispose()  {}
+  onDispose(){ }
+}

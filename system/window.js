@@ -134,7 +134,16 @@ export default class ESKitWindowSystem {
     // テンプレート
     const templateEl = document.createElement("div");
     templateEl.className = "app-template";
-    templateEl.innerHTML = appInstance.template;
+    if (appInstance.template instanceof DocumentFragment) {
+      // Hamon テンプレート: リアクティブ DocumentFragment
+      if (appInstance.template._scope) {
+        appInstance._hamonScope = appInstance.template._scope;
+      }
+      templateEl.appendChild(appInstance.template);
+    } else {
+      // 従来の文字列テンプレート (後方互換)
+      templateEl.innerHTML = appInstance.template;
+    }
     shadowRoot.appendChild(templateEl);
 
     // スタイル

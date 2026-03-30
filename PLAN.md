@@ -195,6 +195,175 @@ toggle(anchorEl: HTMLElement): void
 
 ---
 
+## Phase 3.5: Hamon — リアクティブテンプレートエンジン
+
+**目的:** ESKit アプリ開発における以下の課題を解決するリアクティブテンプレートエンジン「Hamon」を導入する。  
+**完了条件:** Hamon テンプレートで記述したアプリが、シグナル変更で自動 DOM 更新・イベント自動登録/解除・条件分岐のリアクティブ切替を行える。既存の文字列テンプレートアプリも変更なしで動作する (後方互換)。
+
+### 解決する課題
+
+1. **イベントリスナーの手動 add / remove** — `@click` 属性構文で自動登録、スコープ dispose で自動解除
+2. **状態変化に合わせた手動 DOM 更新** — シグナルに依存する DOM ノードを直接・最小限に更新
+3. **条件分岐・リスト描画の煩雑な命令的記述** — `kit-if` / `kit-else` ディレクティブ、`list()` ヘルパー
+
+### 設計方針・決定事項
+
+- **リアクティビティ:** シグナル方式 (VDOM なし)。各シグナルに依存する DOM ノードを直接更新する (SolidJS に近い方式)
+- **テンプレート:** タグ付きテンプレートリテラル `hamon` + `kit-` ディレクティブ
+- **イベント:** `@click` 形式 (属性構文)
+- **属性バインド:** `:value` 形式
+- **条件分岐:** `kit-if` / `kit-else` 属性ディレクティブ
+- **リスト描画:** `list(itemsFn, renderFn)` ヘルパー関数
+- **単一ファイル:** `system/hamon.js` に全実装を収める (ビルド不要哲学)
+- **後方互換:** 文字列テンプレートは従来どおり `innerHTML` でマウント
+
+### `system/hamon.js` — リアクティブプリミティブ (新規)
+
+**signal(initial):**
+```js
+const count = signal(0);
+count.value;      // 0 (get — 実行中 effect があれば依存登録)
+count.value = 1;  // set — 依存する effect を再実行
+count.peek();     // 依存追跡なしで値を読む
+```
+
+**computed(fn):**
+```js
+const double = computed(() => count.value * 2);
+double.value; // 2 (読み取り専用、依存元が変われば自動再計算)
+```
+
+**effect(fn):**
+```js
+const dispose = effect(() => {
+  console.log(count.value); // count が変わるたびに再実行
+  return () => { /* クリーンアップ */ };
+});
+dispose(); // 手動解除
+```
+
+**HamonScope:**
+```js
+const scope = new HamonScope();
+const s = scope.signal(0);
+scope.effect(() => console.log(s.value));
+scope.onDispose(() => { /* 任意のクリーンアップ */ });
+scope.dispose(); // スコープ内の全 effect を一括解除
+```
+
+### `system/hamon.js` — テンプレートエンジン
+
+**`hamon` タグ付きテンプレートリテラル:**
+```js
+import hamon, { signal } from "system/hamon.js";
+
+const count = signal(0);
+const fragment = hamon`
+  <button @click=${() => count.value++}>
+    Count: ${() => count.value}
+  </button>
+  <input :value=${() => count.value} :disabled=${() => count.value > 10}>
+  <p kit-if=${() => count.value > 5}>High!</p>
+  <p kit-else>Low</p>
+`;
+// fragment: リアクティブな DocumentFragment
+// fragment._scope: HamonScope (dispose で全バインディング解除)
+```
+
+**テキスト補間:**
+- `${value}` — 静的値をそのまま挿入
+- `${() => expr}` — 関数: effect で自動更新される Text ノード (戻り値が Node/Fragment なら DOM 挿入)
+- `${signal}` — Signal の `.value` をバインド
+
+**イベントバインディング `@event`:**
+- `@click=${handler}` → `addEventListener("click", handler)`
+- scope dispose 時に自動 `removeEventListener`
+
+**属性バインディング `:attr`:**
+- `:value=${signal}` / `:disabled=${() => bool}` / `:class=${() => str}`
+- `value`, `checked`, `selected`, `disabled` は DOM プロパティ直接設定
+- その他は `setAttribute` / `removeAttribute`
+
+### `system/hamon.js` — ディレクティブ
+
+**`kit-if` / `kit-else`:**
+```html
+<div kit-if=${() => show.value}>表示</div>
+<div kit-else>非表示</div>
+```
+- Comment ノードをアンカーとして位置を記憶
+- 条件の真偽で DOM 挿入/除去 (ノード実体は保持し再生成しない)
+- `kit-else` は直前の `kit-if` 要素の兄弟要素として連動
+
+**`list()` リスト描画ヘルパー:**
+```js
+const items = signal(["A", "B", "C"]);
+hamon`
+  <ul>
+    ${list(() => items.value, (item, i) => hamon`<li>${item}</li>`)}
+  </ul>
+`;
+```
+- 配列シグナルの変化に応じてノードを差分更新
+- 各アイテムの `renderFn` が返す Fragment の `_scope` を追跡し、除去時に dispose
+
+### ESKitApp 統合
+
+**`system/app.js` 変更:**
+- `this.hamon` プロパティ: `HamonScope` の遅延生成ゲッター
+- テンプレートに `hamon` タグ関数の戻り値 (DocumentFragment) を設定可能
+
+**`system/window.js` 変更:**
+- `open()` メソッド内でテンプレートの型判定:
+  - `DocumentFragment` → `templateEl.appendChild(fragment)` (Hamon パス)
+  - `string` → `templateEl.innerHTML = template` (後方互換パス)
+- Hamon テンプレートの `_scope` をアプリインスタンスに紐付け
+
+**`system/system.js` 変更:**
+- `closeApp()` 内で `app._hamonScope?.dispose()` を呼び出し、全 effect を一括解除
+
+### Hamon を使ったアプリの例 (before / after)
+
+**Before (手動 DOM 操作):**
+```js
+export default class CounterApp extends ESKitApp {
+  static template = html`<button id="btn">Count: 0</button>`;
+  initialize() {
+    let count = 0;
+    const btn = this.querySelector("#btn");
+    btn.addEventListener("click", () => {
+      count++;
+      btn.textContent = `Count: ${count}`;
+    });
+  }
+}
+```
+
+**After (Hamon):**
+```js
+import hamon, { signal } from "system/hamon.js";
+export default class CounterApp extends ESKitApp {
+  initialize() {
+    const count = signal(0);
+    this.template = hamon`
+      <button @click=${() => count.value++}>
+        Count: ${() => count.value}
+      </button>
+    `;
+  }
+}
+```
+
+### 将来の拡張 (Phase 3.5 スコープ外)
+
+- **`kit-model` 双方向バインド:** `:value` + `@input` の頻出パターン用ショートハンド
+- **テンプレートキャッシュ:** tagged template の `strings` 参照同一性を利用した WeakMap キャッシュ
+- **既存システム要素の Hamon 化:** taskbar, launcher 等の段階的移行 (オプトイン)
+
+**関連ファイル:** `system/hamon.js` (新規), `system/app.js` (変更), `system/window.js` (変更), `system/system.js` (変更)
+
+---
+
 ## Phase 4: System Services — システムサービス
 
 **目的:** テーマシステム、通知、i18n、設定アプリの基盤サービスを実装する。  
@@ -379,6 +548,7 @@ system/
   window.js
   kitstrap2.js          (実装済み)
   kitstrap2.css         (実装済み)
+  hamon.js              (Phase 3.5)
   theme.js              (Phase 4)
   themes/               (Phase 4)
     light.json
