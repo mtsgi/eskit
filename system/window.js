@@ -21,6 +21,7 @@ import ESKitTaskbarElement   from "./elements/taskbar/main.js";
 export default class ESKitWindowSystem {
   #appElements = new Map(); // uuid → eskit-window element
   #activeUuid  = null;
+  #cascadeIndex = 0;
 
   constructor() {
     this.system = window.System;
@@ -89,6 +90,16 @@ export default class ESKitWindowSystem {
     appElement.id = uuid;
     appElement.setAttribute("mode", this.system.shellMode.current);
 
+    // カスケード配置 (desktop モード)
+    if (!this.system.shellMode.isMobile) {
+      const offset = 30 + 28 * (this.#cascadeIndex % 10);
+      appElement.style.left   = `${offset}px`;
+      appElement.style.top    = `${offset}px`;
+      appElement.style.width  = "640px";
+      appElement.style.height = "480px";
+      this.#cascadeIndex++;
+    }
+
     this.desktopElement.appendChild(appElement);
     this.#appElements.set(uuid, appElement);
 
@@ -118,6 +129,9 @@ export default class ESKitWindowSystem {
     // mobile モードでは即座にフォーカス
     if (this.system.shellMode.isMobile) {
       this.activateWindow(uuid);
+    } else {
+      appElement.focus();
+      this.activateWindow(uuid);
     }
 
     return appElement;
@@ -144,8 +158,12 @@ export default class ESKitWindowSystem {
         win.toggleAttribute("active", id === uuid);
       }
     } else {
-      // desktop: z-index でフォーカス
-      el.style.zIndex = this.system.nextZIndex();
+      // desktop: z-index でフォーカス + focused クラス
+      el.focus();
+      // 最小化されていたら復元
+      if (el._state === "minimized") {
+        el.restore();
+      }
     }
 
     if (prevUuid !== uuid) {
@@ -160,6 +178,15 @@ export default class ESKitWindowSystem {
    */
   getElement(uuid) {
     return this.#appElements.get(uuid);
+  }
+
+  /**
+   * 全ウィンドウ要素を Map として返す。
+   * @returns {Map<string, ESKitWindowElement>}
+   */
+  _getAllElements() {
+    // 防御的コピーを返すことで、呼び出し側から内部状態を直接変更できないようにする
+    return new Map(this.#appElements);
   }
 
   /**
@@ -214,6 +241,139 @@ export default class ESKitWindowSystem {
       // アクティブなし → 一番最後に開いたものをアクティブに
       const lastUuid = [...this.#appElements.keys()].at(-1);
       this.activateWindow(lastUuid);
+    }
+  }
+
+  // ─── スナッププレビュー ────────────────────────────────────────────────────
+
+  /**
+   * ドラッグ中にスナップ先のプレビューオーバーレイを表示する。
+   * @param {"maximize"|"left"|"right"|null} zone — null で非表示
+   */
+  showSnapPreview(zone) {
+    if (!zone) {
+      this.#hideSnapPreview();
+      return;
+    }
+
+    let el = this.#snapPreviewEl;
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "eskit-snap-preview";
+      document.body.appendChild(el);
+      this.#snapPreviewEl = el;
+    }
+
+    const tbH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--eskit-taskbar-height") || "48", 10);
+    el.style.display = "block";
+
+    if (zone === "maximize") {
+      el.style.left   = "4px";
+      el.style.top    = "4px";
+      el.style.width  = `calc(100vw - 8px)`;
+      el.style.height = `calc(100vh - ${tbH}px - 8px)`;
+    } else if (zone === "left") {
+      el.style.left   = "4px";
+      el.style.top    = "4px";
+      el.style.width  = `calc(50vw - 6px)`;
+      el.style.height = `calc(100vh - ${tbH}px - 8px)`;
+    } else if (zone === "right") {
+      el.style.left   = `calc(50vw + 2px)`;
+      el.style.top    = "4px";
+      el.style.width  = `calc(50vw - 6px)`;
+      el.style.height = `calc(100vh - ${tbH}px - 8px)`;
+    }
+  }
+
+  #snapPreviewEl = null;
+
+  #hideSnapPreview() {
+    if (this.#snapPreviewEl) {
+      this.#snapPreviewEl.style.display = "none";
+    }
+  }
+
+  // ─── スナップアシスト ──────────────────────────────────────────────────────
+
+  /**
+   * スナップ後に残り半分に割り当てるアプリ候補パネルを表示する。
+   * @param {"left"|"right"} snappedSide — スナップされた側 (候補パネルは反対側に出る)
+   * @param {string} snappedUuid — スナップしたウィンドウの UUID
+   */
+  showSnapAssist(snappedSide, snappedUuid) {
+    this.#hideSnapAssist();
+
+    // 反対側にすでにスナップ済みのウィンドウがある場合は表示しない
+    const oppSide = snappedSide === "left" ? "right" : "left";
+    const oppOccupied = [...this.#appElements.values()].some(
+      win => win.classList.contains(`snapped-${oppSide}`)
+    );
+    if (oppOccupied) return;
+
+    const candidates = [...this.#appElements.entries()].filter(
+      ([uuid, win]) => uuid !== snappedUuid && win._state !== "minimized"
+    );
+
+    if (candidates.length === 0) return;
+
+    const panel = document.createElement("div");
+    panel.className = "eskit-snap-assist";
+    const tbH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--eskit-taskbar-height") || "48", 10);
+
+    // 反対側に配置
+    if (snappedSide === "left") {
+      panel.style.left   = "50%";
+      panel.style.top    = "0";
+      panel.style.width  = "50%";
+      panel.style.height = `calc(100vh - ${tbH}px)`;
+    } else {
+      panel.style.left   = "0";
+      panel.style.top    = "0";
+      panel.style.width  = "50%";
+      panel.style.height = `calc(100vh - ${tbH}px)`;
+    }
+
+    const title = document.createElement("div");
+    title.className = "eskit-snap-assist-title";
+    title.textContent = "割り当てるアプリを選択";
+    panel.appendChild(title);
+
+    const grid = document.createElement("div");
+    grid.className = "eskit-snap-assist-grid";
+
+    for (const [uuid, win] of candidates) {
+      const app = this.system.getApp(uuid);
+      const btn = document.createElement("button");
+      btn.className = "eskit-snap-assist-item";
+      btn.textContent = app?.name ?? uuid;
+      btn.addEventListener("click", () => {
+        const oppositeSide = snappedSide === "left" ? "right" : "left";
+        win.snap(oppositeSide);
+        this.activateWindow(uuid);
+        this.#hideSnapAssist();
+      });
+      grid.appendChild(btn);
+    }
+
+    panel.appendChild(grid);
+
+    // 背景クリックで閉じる
+    const backdrop = document.createElement("div");
+    backdrop.className = "eskit-snap-assist-backdrop";
+    backdrop.addEventListener("click", () => this.#hideSnapAssist());
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(panel);
+    this.#snapAssistEl = { panel, backdrop };
+  }
+
+  #snapAssistEl = null;
+
+  #hideSnapAssist() {
+    if (this.#snapAssistEl) {
+      this.#snapAssistEl.panel.remove();
+      this.#snapAssistEl.backdrop.remove();
+      this.#snapAssistEl = null;
     }
   }
 }

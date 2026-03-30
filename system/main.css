@@ -24,3 +24,80 @@ body {
   --eskit-home-bar-height:   3.5rem;
   --eskit-taskbar-height:    48px;
 }
+
+/* ─── スナッププレビュー ──────────────────────────────── */
+
+.eskit-snap-preview {
+  display: none;
+  position: fixed;
+  z-index: 9990;
+  background: color-mix(in srgb, var(--eskit-color-primary, #4a90d9) 25%, transparent);
+  border: 2px solid var(--eskit-color-primary, #4a90d9);
+  border-radius: 8px;
+  pointer-events: none;
+  transition: left 0.15s ease, top 0.15s ease, width 0.15s ease, height 0.15s ease;
+}
+
+/* ─── スナップアシスト ────────────────────────────────── */
+
+.eskit-snap-assist-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9994;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.eskit-snap-assist {
+  position: fixed;
+  z-index: 9995;
+  display: flex;
+  flex-direction: column;
+  background: var(--eskit-color-surface, var(--eskit-color-background));
+  border: 1px solid var(--eskit-color-border);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.eskit-snap-assist-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--eskit-color-text-muted, #888);
+  padding: 1rem 1rem 0.5rem;
+  text-align: center;
+  user-select: none;
+}
+
+.eskit-snap-assist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+  flex: 1;
+  align-content: start;
+}
+
+.eskit-snap-assist-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--eskit-color-border);
+  border-radius: 8px;
+  background: var(--eskit-color-surface, #fff);
+  color: var(--eskit-color-text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-align: center;
+  word-break: break-word;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.eskit-snap-assist-item:hover,
+.eskit-snap-assist-item:focus-visible {
+  background: var(--eskit-color-primary);
+  border-color: var(--eskit-color-primary);
+  color: var(--eskit-color-on-primary, #fff);
+  outline: none;
+}
