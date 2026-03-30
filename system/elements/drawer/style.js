@@ -30,6 +30,44 @@ export default css`
 
   /* ─── ハンドル ───────────────────────────────────────────────── */
 
+  /* ─── トップバー (クイック設定ボタン + 時間) ────────────── */
+
+  .drawer-topbar {
+    display: flex;
+    gap: var(--kit-space-s);
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--kit-space-m) var(--kit-space-l) 0;
+  }
+
+  .drawer-time {
+    flex-grow: 1;
+    font-size: var(--kit-font-size-s);
+    font-variant-numeric: tabular-nums;
+    color: var(--eskit-color-text-muted, var(--eskit-color-border));
+  }
+
+  .qs-open-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-space-xs);
+    border: none;
+    border-radius: var(--kit-radius-s);
+    background: color-mix(in srgb, var(--eskit-color-text) 8%, transparent);
+    color: var(--eskit-color-text);
+    font: inherit;
+    font-size: var(--kit-font-size-s);
+    padding: var(--kit-space-xs) var(--kit-space-m);
+    cursor: pointer;
+  }
+
+  .qs-open-btn:hover,
+  .qs-open-btn:focus-visible {
+    background: var(--eskit-color-primary);
+    color: var(--eskit-color-on-primary, #fff);
+    outline: none;
+  }
+
   .drawer-handle {
     display: flex;
     justify-content: center;

@@ -147,9 +147,9 @@ hide(): void
 - Popover API で表示 (`popover="manual"`)、画面端でポジション自動補正
 - 他クリック (`pointerdown` outside) / Escape キーで `hide()`
 
-### `system/elements/spotlight/` (新規)
+### `system/elements/beacon/` (新規)
 
-**ESKitSpotlightElement** — グローバル検索オーバーレイ:
+**ESKitBeaconElement** — グローバル検索オーバーレイ:
 ```js
 show(): void
 hide(): void
@@ -191,7 +191,7 @@ toggle(anchorEl: HTMLElement): void
 - グローバルキーバインド (`Ctrl+Space`) の登録
 - `system:ready` イベント後に実行
 
-**関連ファイル:** `system/elements/context-menu/main.js`, `style.js` (新規), `system/elements/spotlight/main.js`, `style.js` (新規), `system/elements/quick-settings/main.js`, `style.js` (新規), `system/elements/window/style.js` (変更), `system/elements/desktop/main.js` (変更), `system/elements/taskbar/main.js` (変更), `system/system.js` (変更)
+**関連ファイル:** `system/elements/context-menu/main.js`, `style.js` (新規), `system/elements/beacon/main.js`, `style.js` (新規), `system/elements/quick-settings/main.js`, `style.js` (新規), `system/elements/window/style.js` (変更), `system/elements/desktop/main.js` (変更), `system/elements/taskbar/main.js` (変更), `system/system.js` (変更)
 
 ---
 
@@ -396,7 +396,7 @@ system/
     permission-dialog/
     taskbar/            (実装済み)
     context-menu/       (Phase 3)
-    spotlight/          (Phase 3)
+    beacon/             (Phase 3)
     quick-settings/     (Phase 3)
     notification/       (Phase 4)
 apps/

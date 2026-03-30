@@ -24,6 +24,16 @@ export default class ESKitDrawerElement extends HTMLElement {
   connectedCallback() {
     this.#render();
     this.#adoptStyle();
+    // クイック設定ボタン
+    this.shadowRoot.getElementById("qs-btn").addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.quickSettings?.toggle();
+    });
+    // スポットライト検索ボタン
+    this.shadowRoot.getElementById("beacon-btn").addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.beacon?.show();
+    });
     // オーバーレイ背景クリックで閉じる
     this.addEventListener("click", e => {
       if (e.target === this) this.close();
@@ -37,6 +47,7 @@ export default class ESKitDrawerElement extends HTMLElement {
   /** ドロワーを開く (内容をリフレッシュしてから表示) */
   open() {
     this.#refresh();
+    this.#updateTime();
     this.setAttribute("open", "");
     window.System?.events.emit("drawer:open");
   }
@@ -60,6 +71,14 @@ export default class ESKitDrawerElement extends HTMLElement {
     if (!sys) return;
     this.#renderRunning(sys.listProcesses());
     this.#renderAllApps(sys.registry.list());
+  }
+
+  /** トップバーの時刻表示を更新する */
+  #updateTime() {
+    const el = this.shadowRoot.getElementById("drawer-time");
+    if (!el) return;
+    const now = new Date();
+    el.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   }
 
   #renderRunning(processes) {

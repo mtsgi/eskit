@@ -21,13 +21,17 @@ System.getApp(uuid);                          // アプリインスタンスを�
 System.listProcesses();                       // [{uuid, name, state}, ...]
 System.notify({ title, message, duration });  // 通知を表示
 System.sendMessage(targetUuid, data);         // アプリ間 IPC
+System.setShellMode("desktop" | "mobile");   // シェルモードを手動切替
 System.nextZIndex();                          // フォーカス用 z-index を取得 (呼ぶたびに増加)
+System.generateUUID();                        // crypto.randomUUID() のラッパー
 
 // サブシステムへのアクセス
-System.events      // ESKitEventBus
-System.fs          // ESKitFileSystem
-System.registry    // ESKitRegistry
-System.permissions // ESKitPermissions
+System.events       // ESKitEventBus
+System.fs           // ESKitFileSystem
+System.registry     // ESKitRegistry
+System.permissions  // ESKitPermissions
+System.shellMode    // ESKitShellMode
+System.WindowSystem // ESKitWindowSystem (ブート後)
 ```
 
 ### `System.ready`
@@ -38,6 +42,140 @@ System.permissions // ESKitPermissions
 await System.ready;
 // ブート完了後の処理
 ```
+
+---
+
+## `System.shellMode` — シェルモード
+
+デスクトップ/モバイルの動作モードを管理する `ESKitShellMode` のインスタンスです。
+
+```js
+System.shellMode.current;   // "desktop" | "mobile"
+System.shellMode.isDesktop; // boolean
+System.shellMode.isMobile;  // boolean
+System.shellMode.isLocked;  // boolean — 手動設定中は true、自動検出中は false
+
+System.shellMode.set("mobile"); // 手動でモードを設定 (MediaQuery 自動検出を停止)
+System.shellMode.unlock();      // 自動検出を再開し、ビューポートに応じたモードに戻す
+```
+
+モード変更時は `"shell:mode-changed"` イベントが発行されます。`System.setShellMode()` は `shellMode.set()` の便利なショートハンドです。
+
+| モード | 説明 |
+|--------|------|
+| `"desktop"` | 複数ウィンドウのカード形式。タスクバー・ランチャーが表示される |
+| `"mobile"` | 1 画面 1 アプリの全画面形式。ホームバー・ドロワーが表示される |
+
+---
+
+## `System.WindowSystem` — シェル UI 要素
+
+ウィンドウとシェル要素を管理する `ESKitWindowSystem` のインスタンスです。ブート完了後にアクセスできます。
+
+```js
+System.WindowSystem.activeUuid;      // 現在フォーカス中のウィンドウ UUID
+System.WindowSystem.getElement(uuid); // UUID から eskit-window 要素を取得
+System.WindowSystem.activateWindow(uuid); // ウィンドウをアクティブにする (desktop: 最前面 / mobile: 全画面)
+System.WindowSystem.getAllElements(); // 全ウィンドウ要素の配列
+```
+
+### シェル UI 要素へのアクセス
+
+| プロパティ | 要素 | 説明 |
+|-----------|------|------|
+| `WindowSystem.contextMenu` | `<eskit-context-menu>` | 右クリックコンテキストメニュー |
+| `WindowSystem.beacon` | `<eskit-beacon>` | グローバル検索オーバーレイ |
+| `WindowSystem.quickSettings` | `<eskit-quick-settings>` | クイック設定パネル |
+| `WindowSystem.taskbar` | `<eskit-taskbar>` | タスクバー (desktop のみ) |
+| `WindowSystem.launcher` | `<eskit-launcher>` | ランチャー (desktop のみ) |
+| `WindowSystem.drawer` | `<eskit-drawer>` | アプリドロワー (mobile のみ) |
+| `WindowSystem.homeBar` | `<eskit-home-bar>` | ホームバー (mobile のみ) |
+
+### `ESKitContextMenuElement`
+
+```js
+const cm = System.WindowSystem.contextMenu;
+
+cm.show(x, y, items); // 座標 (clientX/Y) 指定でメニューを表示
+cm.hide();            // メニューを閉じる
+
+// items の形式:
+// { label: string, action: () => void, icon?: string }
+// { separator: true }
+```
+
+- Popover API (`popover="manual"`) で表示。画面端を自動補正して位置調整します。
+- 外側クリック / Escape キーで自動的に閉じます。
+
+### `ESKitBeaconElement` — グローバル検索
+
+```js
+const beacon = System.WindowSystem.beacon;
+
+beacon.show();   // 検索オーバーレイを開く
+beacon.hide();   // 閉じる
+beacon.toggle(); // 開閉トグル
+```
+
+- `Ctrl+Space` / `Cmd+Space` でグローバルに toggle されます。
+- `System.registry.search(query)` でアプリをリアルタイム検索。
+- `↑` / `↓` キーで候補選択、`Enter` で起動、`Escape` で閉じます。
+
+### `ESKitQuickSettingsElement`
+
+```js
+const qs = System.WindowSystem.quickSettings;
+
+qs.show();   // パネルを開く
+qs.hide();   // 閉じる
+qs.toggle(); // 開閉トグル
+```
+
+- タスクバーの時計クリックで呼び出されます。
+- モバイルモードではドロワー上部の ⚙️ ボタンからも開けます。
+- モバイル時は画面上部に全幅で表示されます。
+
+---
+
+## `ESKitWindowElement` — アプリウィンドウ
+
+すべてのアプリウィンドウは `<eskit-window>` カスタム要素で管理されます。`ESKitApp._windowElement` から参照できます。
+
+### ウィンドウ操作
+
+```js
+const win = app._windowElement;
+
+win.focus();         // ウィンドウを最前面にフォーカスする
+win.minimize();      // 最小化
+win.maximize();      // 最大化
+win.restore();       // 通常状態に復元 (最小化・最大化・スナップから)
+win.snap("left");    // 画面左半分にスナップ
+win.snap("right");   // 画面右半分にスナップ
+win.setTitle(title); // タイトルバーのテキストを更新
+```
+
+### 状態・属性
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `win._state` | `"normal"\|"minimized"\|"maximized"` | 現在のウィンドウ状態 |
+| `win._prevRect` | `{left, top, width, height}\|null` | 最大化・スナップ前の位置とサイズ |
+
+| 属性 | 説明 |
+|------|------|
+| `mode="desktop"\|"mobile"` | シェルモードに連動して自動更新 |
+| `active` | mobile モードで全画面表示するとき付与 |
+
+### ドラッグ・リサイズ
+
+- **ドラッグ:** タイトルバー (`.app-header`) を掴んでウィンドウを移動。最大化中はドラッグ不可。
+- **タイトルバーダブルクリック:** 最大化 / 復元トグル。
+- **リサイズ:** 8 方向ハンドル (N/S/E/W/NE/NW/SE/SW) でリサイズ。最小サイズ: 幅 220px / 高さ 120px。
+- **スナッププレビュー:** ドラッグ中に画面端に近づくと半透明のプレビューを表示。`pointerup` 時にスナップを確定。
+  - 上端 (y ≤ 8px) → `maximize()`
+  - 左端 (x ≤ 8px) → `snap("left")`
+  - 右端 (x ≥ innerWidth - 8px) → `snap("right")`
 
 ---
 
@@ -145,6 +283,9 @@ System.events.emit("my-event", { data: 123 });
 | `app:titleChanged` | `{uuid, title}` | タイトル変更 |
 | `notification:show` | `{title?, message?, duration?}` | 通知表示 |
 | `launcher:toggle` | — | ランチャー開閉 |
+| `shell:mode-changed` | `{mode, prev}` | desktop/mobile モード切替 |
+| `drawer:open` | — | ドロワーが開かれた |
+| `drawer:close` | — | ドロワーが閉じられた |
 
 ---
 
@@ -154,9 +295,21 @@ System.events.emit("my-event", { data: 123 });
 // define.json からアプリを登録
 const manifest = await System.registry.register("apps/myapp/");
 
-// 登録済みアプリ一覧
+// Manifest を手動で登録 (外部アプリインストール等)
+System.registry.registerManual(id, manifest, dir?);
+
+// 登録を解除する
+System.registry.unregister(id);
+
+// ID で Manifest を取得
+const manifest = System.registry.get(id);           // Manifest | null
+
+// ディレクトリで Manifest を取得
+const manifest = System.registry.getByDir(appDir);  // Manifest | null
+
+// 登録済みアプリ一覧 (各オブジェクトに _dir プロパティを付与)
 const apps = System.registry.list();
-// → [{ id, name, entry, version, description, permissions, icon }, ...]
+// → [{ id, name, entry, version, description, permissions, icon, _dir }, ...]
 
 // 検索 (name / description / id に対してあいまい検索)
 const results = System.registry.search("notepad");
@@ -177,6 +330,14 @@ System.permissions.isDeclared(uuid, "fs.read"); // boolean
 
 // Runtime チェック (非同期): 実際の許可状態を確認 (必要に応じてダイアログ)
 const granted = await System.permissions.check(uuid, "notifications");
+
+// 権限を明示的に許可 / 拒否し localStorage に永続化する
+System.permissions.grant(uuid, "fs.read");         // 許可
+System.permissions.grant(uuid, "fs.read", false);  // 拒否 (第 3 引数)
+System.permissions.deny(uuid, "fs.read");          // 拒否のショートハンド
+
+// アプリ終了時にセッションエントリをクリア (localStorage は維持)
+System.permissions.revoke(uuid);
 ```
 
 ---
@@ -184,6 +345,35 @@ const granted = await System.permissions.check(uuid, "notifications");
 ## `ESKitApp` — アプリ基底クラス
 
 すべての ESKit アプリはこのクラスを継承します。
+
+### アプリの定義パターン
+
+```js
+import ESKitApp from "system/app.js";
+import { html, css } from "system/util.js";
+
+export default class MyApp extends ESKitApp {
+  // static プロパティでテンプレートとスタイルを宣言する (推奨)
+  static template = html`
+    <h1>Hello, ESKit!</h1>
+    <button id="btn">Click me</button>
+  `;
+
+  static style = css`
+    h1 { color: var(--kit-color-primary); }
+  `;
+
+  initialize() {
+    // _uuid, _windowElement が注入された後に呼ばれる
+    this.querySelector("#btn").addEventListener("click", () => {
+      this.setTitle("Clicked!");
+    });
+  }
+
+  close() {
+    // クリーンアップ (タイマー停止など)
+  }
+}
 
 ### ライフサイクルフック
 
@@ -211,6 +401,7 @@ await this.showNotification(opts)     // 通知 (permissions: "notifications" �
 
 | プロパティ | 説明 |
 |----------|------|
+| `this.name` | アプリ表示名 (コンストラクタクラス名、または `setTitle()` で変更) |
 | `this._uuid` | アプリ固有の UUID |
 | `this._manifest` | `define.json` から読み込まれた Manifest |
 | `this._state` | `"running"`, `"minimized"`, `"maximized"`, `"closed"` |

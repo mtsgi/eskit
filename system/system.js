@@ -72,9 +72,43 @@ export default class ESKitSystem {
     this.shellMode.set(mode);
   }
 
-  // ─── シェル UI (Phase 3 で実装) ────────────────────────────────────────────
+  // ─── シェル UI ─────────────────────────────────────────────────────────────
 
-  initUI() {}
+  initUI() {
+    // コンテキストメニュー: デスクトップ右クリック
+    window.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const cm = this.WindowSystem?.contextMenu;
+      if (!cm) return;
+      cm.show(e.clientX, e.clientY, [
+        {
+          icon: "☰",
+          label: "ランチャーを開く",
+          action: () => this.events.emit("launcher:toggle"),
+        },
+        { separator: true },
+        {
+          icon: "🔍",
+          label: "検索",
+          action: () => this.WindowSystem?.beacon?.toggle(),
+        },
+        { separator: true },
+        {
+          icon: "🔄",
+          label: `${this.shellMode.isMobile ? "Desktop" : "Mobile"} モードに切替`,
+          action: () => this.setShellMode(this.shellMode.isMobile ? "desktop" : "mobile"),
+        },
+      ]);
+    });
+
+    // グローバルキーバインド: Ctrl+Space / Cmd+Space でスポットライト
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        this.WindowSystem?.beacon?.toggle();
+      }
+    });
+  }
 
   // ─── アプリ ライフサイクル ─────────────────────────────────────────────────
 

@@ -1,9 +1,12 @@
-import ESKitDesktopElement  from "./elements/desktop/main.js";
-import ESKitLauncherElement  from "./elements/launcher/main.js";
-import ESKitWindowElement    from "./elements/window/main.js";
-import ESKitDrawerElement    from "./elements/drawer/main.js";
-import ESKitHomeBarElement   from "./elements/home-bar/main.js";
-import ESKitTaskbarElement   from "./elements/taskbar/main.js";
+import ESKitDesktopElement       from "./elements/desktop/main.js";
+import ESKitLauncherElement      from "./elements/launcher/main.js";
+import ESKitWindowElement        from "./elements/window/main.js";
+import ESKitDrawerElement        from "./elements/drawer/main.js";
+import ESKitHomeBarElement       from "./elements/home-bar/main.js";
+import ESKitTaskbarElement       from "./elements/taskbar/main.js";
+import ESKitContextMenuElement   from "./elements/context-menu/main.js";
+import ESKitBeaconElement        from "./elements/beacon/main.js";
+import ESKitQuickSettingsElement from "./elements/quick-settings/main.js";
 
 /**
  * ESKitWindowSystem — ウィンドウ・シェル要素の管理
@@ -28,12 +31,15 @@ export default class ESKitWindowSystem {
     if (!this.system) throw new Error("[ESKitWindowSystem] System が初期化されていません");
 
     // Custom Elements の登録
-    customElements.define("eskit-window",   ESKitWindowElement);
-    customElements.define("eskit-launcher", ESKitLauncherElement);
-    customElements.define("eskit-desktop",  ESKitDesktopElement);
-    customElements.define("eskit-drawer",   ESKitDrawerElement);
-    customElements.define("eskit-home-bar", ESKitHomeBarElement);
-    customElements.define("eskit-taskbar",  ESKitTaskbarElement);
+    customElements.define("eskit-window",         ESKitWindowElement);
+    customElements.define("eskit-launcher",       ESKitLauncherElement);
+    customElements.define("eskit-desktop",        ESKitDesktopElement);
+    customElements.define("eskit-drawer",         ESKitDrawerElement);
+    customElements.define("eskit-home-bar",       ESKitHomeBarElement);
+    customElements.define("eskit-taskbar",        ESKitTaskbarElement);
+    customElements.define("eskit-context-menu",   ESKitContextMenuElement);
+    customElements.define("eskit-beacon",         ESKitBeaconElement);
+    customElements.define("eskit-quick-settings", ESKitQuickSettingsElement);
 
     // ─── シェル要素の構築 ──────────────────────────────────────────────
 
@@ -55,6 +61,18 @@ export default class ESKitWindowSystem {
     // HomeBar (mobile モードで表示 — fixed なので desktop 直下に追加)
     this.homeBar = document.createElement("eskit-home-bar");
     this.desktopElement.appendChild(this.homeBar);
+
+    // Context Menu (右クリックメニュー)
+    this.contextMenu = document.createElement("eskit-context-menu");
+    this.desktopElement.appendChild(this.contextMenu);
+
+    // Beacon (グローバル検索)
+    this.beacon = document.createElement("eskit-beacon");
+    this.desktopElement.appendChild(this.beacon);
+
+    // Quick Settings (クイック設定パネル)
+    this.quickSettings = document.createElement("eskit-quick-settings");
+    this.desktopElement.appendChild(this.quickSettings);
 
     // ─── シェルモードの初期値を適用 ───────────────────────────────────
 
