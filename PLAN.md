@@ -355,6 +355,8 @@ export default class CounterApp extends ESKitApp {
 }
 ```
 
+※ `WindowSystem.open()` は `initialize()` より前に `template` をマウントするため、Hamon テンプレートは constructor（または static `template`）で設定する。`initialize()` はマウント後のイベント購読・初期データ取得などに引き続き利用する。
+
 ### 将来の拡張 (Phase 3.5 スコープ外)
 
 - **`kit-model` 双方向バインド:** `:value` + `@input` の頻出パターン用ショートハンド

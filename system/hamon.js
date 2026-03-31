@@ -322,6 +322,7 @@ export function hamon(strings, ...values) {
  * 全アイテムを再描画する。
  * 各アイテムの renderFn が返す Fragment の `_scope` は、
  * リスト再描画時に自動 dispose される。
+ * 配列サイズが大きい場合は再描画コストが増えるため、使用箇所に応じて注意すること。
  *
  * @example
  * const items = signal(["A", "B", "C"]);

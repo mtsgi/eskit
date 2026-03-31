@@ -139,7 +139,11 @@ export default class ESKitWindowSystem {
       if (appInstance.template._scope) {
         const nextScope = appInstance.template._scope;
         if (appInstance._hamonScope && appInstance._hamonScope !== nextScope) {
-          appInstance._hamonScope.dispose?.();
+          if (typeof appInstance._hamonScope.dispose === "function") {
+            appInstance._hamonScope.dispose();
+          } else if (typeof appInstance._hamonScope.destroy === "function") {
+            appInstance._hamonScope.destroy();
+          }
         }
         appInstance._hamonScope = nextScope;
       }
