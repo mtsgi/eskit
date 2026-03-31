@@ -481,3 +481,179 @@ await System.registry.registerFromUrl("https://example.com/myapp/");
 | `description` | — | アプリの説明 |
 | `icon` | — | アイコン画像のファイル名 |
 | `permissions` | — | 要求権限の配列 |
+
+---
+
+## Hamon — リアクティブテンプレートエンジン
+
+`system/hamon.js` — シグナル方式のリアクティビティ (VDOM なし) でアプリ UI を宣言的に構築する。
+
+```js
+import hamon, { signal, computed, effect, list, isSignal, HamonScope } from "system/hamon.js";
+```
+
+### signal(initial)
+
+リアクティブな値を作成する。
+
+```js
+const count = signal(0);
+count.value;      // 0 — get (実行中 effect があれば依存登録)
+count.value = 1;  // set — 依存する全 effect が再実行される
+count.peek();     // 1 — 依存追跡なしで現在値を読む
+```
+
+### computed(fn)
+
+読み取り専用の派生シグナル。依存元が変化すると自動再計算される。
+
+```js
+const count  = signal(3);
+const double = computed(() => count.value * 2);
+double.value; // 6
+count.value = 5;
+double.value; // 10
+```
+
+### effect(fn)
+
+副作用を登録する。依存シグナルが変化すると自動再実行。`fn` が関数を返した場合、次回再実行前にクリーンアップとして呼ばれる。
+
+```js
+const dispose = effect(() => {
+  console.log("count =", count.value);
+  return () => console.log("cleanup");
+});
+dispose(); // 手動で解除
+```
+
+### isSignal(v)
+
+引数が Signal オブジェクトかどうかを判定する。
+
+```js
+isSignal(signal(0)); // true
+isSignal(42);        // false
+```
+
+### hamon\`...\`
+
+リアクティブな `DocumentFragment` を返すタグ付きテンプレートリテラル。
+
+```js
+const count = signal(0);
+const fragment = hamon`
+  <button @click=${() => count.value++}>
+    Count: ${() => count.value}
+  </button>
+`;
+```
+
+返却される `fragment` は通常の `DocumentFragment` に `_scope: HamonScope` プロパティが付与されている。`_scope.dispose()` で全バインディングを一括解除できる。
+
+#### テキスト補間
+
+| 構文 | 挙動 |
+|------|------|
+| `${value}` | 静的値をそのまま Text ノードとして挿入 |
+| `${() => expr}` | effect で自動更新。戻り値が Node/Fragment なら DOM 挿入 |
+| `${signalObj}` | Signal の `.value` を effect でバインド |
+
+#### イベントバインディング `@event`
+
+```html
+<button @click=${handler}>...</button>
+<input @input=${(e) => name.value = e.target.value}>
+```
+
+scope dispose 時に `removeEventListener` が自動呼び出しされる。
+
+#### 属性バインディング `:attr`
+
+```html
+<input :value=${() => name.value} :disabled=${() => locked.value}>
+<div :class=${() => active.value ? "on" : "off"}>
+```
+
+| 属性名 | 設定方式 |
+|--------|---------|
+| `value`, `checked`, `selected`, `disabled` | DOM プロパティ直接設定 (`el[attr] = v`) |
+| その他 | `setAttribute` / `removeAttribute` |
+
+`false` / `null` を設定すると属性が除去される。`true` は空文字属性 (`attr=""`) になる。
+
+#### `kit-if` / `kit-else` 条件分岐
+
+```js
+const show = signal(true);
+hamon`
+  <div kit-if=${() => show.value}>表示される</div>
+  <div kit-else>非表示のとき表示</div>
+`;
+```
+
+- Comment ノードをアンカーとして位置を記憶
+- 条件の真偽で要素を DOM に挿入/除去 (ノード実体は保持し再生成しない)
+- `kit-else` は直前の `kit-if` 要素の次の兄弟要素として連動する
+
+### list(itemsFn, renderFn)
+
+リスト描画ヘルパー。テキスト補間内で使用する。
+
+```js
+const items = signal(["Apple", "Banana", "Cherry"]);
+const fragment = hamon`
+  <ul>
+    ${list(() => items.value, (item, i) => hamon`<li>${item}</li>`)}
+  </ul>
+`;
+```
+
+- `itemsFn` — 配列を返す関数 (Signal に依存可能)
+- `renderFn(item, index)` — 各アイテムの DOM を返す関数。`hamon` タグ関数、DOM ノード、文字列のいずれかを返せる
+- 配列が変化するとリスト全体が再レンダリングされる。各アイテムの `_scope` は再レンダリング時に自動 dispose
+
+### HamonScope
+
+Effect のライフサイクルスコープ。アプリ終了時にまとめて dispose するために使用する。
+
+```js
+const scope = new HamonScope();
+const count = scope.signal(0);
+scope.effect(() => console.log(count.value));
+scope.onDispose(() => { /* 任意のクリーンアップ */ });
+scope.dispose(); // スコープ内の全 effect を一括解除
+```
+
+| メソッド | 説明 |
+|---------|------|
+| `signal(v)` | `signal(v)` のエイリアス |
+| `computed(fn)` | `computed(fn)` のエイリアス |
+| `effect(fn)` | effect を作成し dispose を追跡する |
+| `onDispose(fn)` | dispose 時に呼ばれるコールバックを追加 |
+| `dispose()` | 全 effect・コールバックを一括解除 |
+
+### ESKitApp との統合
+
+`ESKitApp` 基底クラスに `hamon` ゲッターが追加されており、アプリ専用の `HamonScope` を利用できる。
+
+```js
+import ESKitApp from "system/app.js";
+import hamon, { signal } from "system/hamon.js";
+
+export default class MyApp extends ESKitApp {
+  constructor() {
+    super();
+    const count = this.hamon.signal(0);
+    this.template = hamon`
+      <button @click=${() => count.value++}>
+        Count: ${() => count.value}
+      </button>
+    `;
+  }
+}
+```
+
+- `this.hamon` は `HamonScope` インスタンスを遅延生成して返す
+- テンプレートに `DocumentFragment` を設定すると、ウィンドウシステムが自動判定して DOM 挿入する
+- アプリ終了時 (`closeApp`) に `_hamonScope.dispose()` が自動呼び出しされ、全 effect が解除される

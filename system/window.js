@@ -134,7 +134,24 @@ export default class ESKitWindowSystem {
     // テンプレート
     const templateEl = document.createElement("div");
     templateEl.className = "app-template";
-    templateEl.innerHTML = appInstance.template;
+    if (appInstance.template instanceof DocumentFragment) {
+      // Hamon テンプレート: リアクティブ DocumentFragment
+      if (appInstance.template._scope) {
+        const nextScope = appInstance.template._scope;
+        if (appInstance._hamonScope && appInstance._hamonScope !== nextScope) {
+          if (typeof appInstance._hamonScope.dispose === "function") {
+            appInstance._hamonScope.dispose();
+          } else if (typeof appInstance._hamonScope.destroy === "function") {
+            appInstance._hamonScope.destroy();
+          }
+        }
+        appInstance._hamonScope = nextScope;
+      }
+      templateEl.appendChild(appInstance.template);
+    } else {
+      // 従来の文字列テンプレート (後方互換)
+      templateEl.innerHTML = appInstance.template;
+    }
     shadowRoot.appendChild(templateEl);
 
     // スタイル
@@ -395,4 +412,3 @@ export default class ESKitWindowSystem {
     }
   }
 }
-
