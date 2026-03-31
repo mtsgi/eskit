@@ -137,7 +137,11 @@ export default class ESKitWindowSystem {
     if (appInstance.template instanceof DocumentFragment) {
       // Hamon テンプレート: リアクティブ DocumentFragment
       if (appInstance.template._scope) {
-        appInstance._hamonScope = appInstance.template._scope;
+        const nextScope = appInstance.template._scope;
+        if (appInstance._hamonScope && appInstance._hamonScope !== nextScope) {
+          appInstance._hamonScope.dispose?.();
+        }
+        appInstance._hamonScope = nextScope;
       }
       templateEl.appendChild(appInstance.template);
     } else {
@@ -404,4 +408,3 @@ export default class ESKitWindowSystem {
     }
   }
 }
-

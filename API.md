@@ -611,7 +611,7 @@ const fragment = hamon`
 
 - `itemsFn` — 配列を返す関数 (Signal に依存可能)
 - `renderFn(item, index)` — 各アイテムの DOM を返す関数。`hamon` タグ関数、DOM ノード、文字列のいずれかを返せる
-- 配列が変化すると差分更新される。各アイテムの `_scope` は除去時に自動 dispose
+- 配列が変化するとリスト全体が再レンダリングされる。各アイテムの `_scope` は再レンダリング時に自動 dispose
 
 ### HamonScope
 
@@ -642,7 +642,8 @@ import ESKitApp from "system/app.js";
 import hamon, { signal } from "system/hamon.js";
 
 export default class MyApp extends ESKitApp {
-  initialize() {
+  constructor() {
+    super();
     const count = this.hamon.signal(0);
     this.template = hamon`
       <button @click=${() => count.value++}>

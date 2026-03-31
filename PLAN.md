@@ -304,8 +304,8 @@ hamon`
   </ul>
 `;
 ```
-- 配列シグナルの変化に応じてノードを差分更新
-- 各アイテムの `renderFn` が返す Fragment の `_scope` を追跡し、除去時に dispose
+- 配列シグナルの変化に応じてリスト部を再レンダー（現状は全体再構築）
+- 将来的には各アイテムの Fragment `_scope` を追跡し、除去時に dispose する差分更新に対応予定
 
 ### ESKitApp 統合
 
@@ -343,7 +343,8 @@ export default class CounterApp extends ESKitApp {
 ```js
 import hamon, { signal } from "system/hamon.js";
 export default class CounterApp extends ESKitApp {
-  initialize() {
+  constructor() {
+    super();
     const count = signal(0);
     this.template = hamon`
       <button @click=${() => count.value++}>

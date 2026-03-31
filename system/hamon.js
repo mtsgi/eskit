@@ -318,9 +318,10 @@ export function hamon(strings, ...values) {
 /**
  * リスト描画ヘルパー。hamon テンプレートのテキスト補間内で使用する。
  *
- * `itemsFn` が返す配列が変化するたびに DOM を差分更新する。
+ * `itemsFn` が返す配列が変化するたびに、既存のリスト DOM をクリアして
+ * 全アイテムを再描画する。
  * 各アイテムの renderFn が返す Fragment の `_scope` は、
- * アイテム除去時に自動 dispose される。
+ * リスト再描画時に自動 dispose される。
  *
  * @example
  * const items = signal(["A", "B", "C"]);
@@ -344,7 +345,7 @@ export function list(itemsFn, renderFn) {
  *   "text"      — テキスト補間 (コメントマーカーでプレースホルダー化)
  *   "event"     — @event バインディング
  *   "bind"      — :attr バインディング
- *   "directive" — kit-if / kit-for ディレクティブ
+ *   "directive" — kit-if ディレクティブ
  * @property {number} valueIndex - values 配列内のインデックス
  * @property {string} [name]     - イベント名・属性名・ディレクティブ名
  */
@@ -382,7 +383,7 @@ function _compileTemplate(strings, values) {
         // 属性名を data-h-eN に置換してイベントハンドラをマーク
         slots.push({ type: "event", valueIndex: i, name: attrName.slice(1) });
         markup += staticPart.replace(
-          new RegExp(_escapeRegex(attrName) + "\\s*=$"),
+          new RegExp(_escapeRegex(attrName) + "\\s*=\\s*$"),
           `${ATTR_PREFIX}e${i}=`,
         );
         markup += `"${i}"`;
@@ -391,16 +392,16 @@ function _compileTemplate(strings, values) {
         // ─ :attr バインディング ─
         slots.push({ type: "bind", valueIndex: i, name: attrName.slice(1) });
         markup += staticPart.replace(
-          new RegExp(_escapeRegex(attrName) + "\\s*=$"),
+          new RegExp(_escapeRegex(attrName) + "\\s*=\\s*$"),
           `${ATTR_PREFIX}b${i}=`,
         );
         markup += `"${i}"`;
 
-      } else if (attrName === "kit-if" || attrName === "kit-for") {
+      } else if (attrName === "kit-if") {
         // ─ kit-* ディレクティブ ─
         slots.push({ type: "directive", valueIndex: i, name: attrName });
         markup += staticPart.replace(
-          new RegExp(_escapeRegex(attrName) + "\\s*=$"),
+          new RegExp(_escapeRegex(attrName) + "\\s*=\\s*$"),
           `${ATTR_PREFIX}d${i}=`,
         );
         markup += `"${i}"`;
@@ -636,7 +637,7 @@ function _applyAttr(el, attrName, value, isDomProperty) {
 
 /**
  * Fragment 内の `data-h-dN` マーカーを持つ要素を走査し、
- * kit-if / kit-for ディレクティブを適用する。
+ * kit-if ディレクティブを適用する。
  *
  * @param {Node} rootNode
  * @param {any[]} values
@@ -649,7 +650,6 @@ function _bindDirectives(rootNode, values, slots, scope) {
     if (slot.name === "kit-if") {
       _applyKitIf(rootNode, slot.valueIndex, values[slot.valueIndex], scope);
     }
-    // kit-for はテキスト補間内の list() ヘルパーで対応
   }
 }
 
