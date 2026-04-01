@@ -81,11 +81,17 @@ export default class ESKitSystem {
       const cm = this.WindowSystem?.contextMenu;
       if (!cm) return;
       cm.show(e.clientX, e.clientY, [
-        {
-          icon: "☰",
-          label: "ランチャーを開く",
-          action: () => this.events.emit("launcher:toggle"),
-        },
+        this.shellMode.isMobile
+          ? {
+              icon: "💠",
+              label: "ドロワーを開く",
+              action: () => this.WindowSystem?.drawer?.toggle(),
+            }
+          : {
+              icon: "💠",
+              label: "ランチャーを開く",
+              action: () => this.events.emit("launcher:toggle"),
+            },
         { separator: true },
         {
           icon: "🔍",

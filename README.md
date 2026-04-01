@@ -22,8 +22,11 @@ ESKitSystem (window.System)
 └── WindowSystem: ESKitWindowSystem    ウィンドウ管理
     ├── eskit-desktop                  デスクトップ要素
     ├── eskit-window                   ウィンドウ要素
-    ├── eskit-taskbar                  タスクバー (Phase 3)
-    └── eskit-launcher                 アプリランチャー
+    ├── eskit-taskbar                  タスクバー
+    ├── eskit-launcher                 アプリランチャー
+    ├── eskit-context-menu             右クリックコンテキストメニュー
+    ├── eskit-beacon                   グローバル検索オーバーレイ
+    └── eskit-quick-settings           クイック設定パネル
 ```
 
 ### 起動シーケンス
@@ -147,8 +150,9 @@ export default css`
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | 🛠️ 実装済み |
-| 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | 予定 |
-| 3 | デスクトップシェル (タスクバー / ランチャー / コンテキストメニュー) | 予定 |
+| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | ✅ 実装済み |
+| 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | ✅ 実装済み |
+| 3 | デスクトップシェル (コンテキストメニュー / グローバル検索 / クイック設定) | ✅ 実装済み |
+| 3.5 | Hamon リアクティブテンプレートエンジン | ✅ 実装済み |
 | 4 | システムサービス (通知 / テーマ / i18n / 設定アプリ) | 予定 |
 | 5 | 開発者体験 (サンプルアプリ / 外部インストール) | 予定 |

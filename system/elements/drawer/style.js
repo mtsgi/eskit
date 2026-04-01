@@ -17,6 +17,16 @@ export default css`
     justify-content: flex-end;
   }
 
+  @keyframes drawer-in {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  @keyframes drawer-out {
+    from { transform: translateY(0); }
+    to   { transform: translateY(100%); }
+  }
+
   /* ─── パネル ─────────────────────────────────────────────────── */
 
   .drawer-panel {
@@ -26,6 +36,11 @@ export default css`
     max-height: 85dvh;
     overflow-y: auto;
     overscroll-behavior: contain;
+    animation: drawer-in 0.25s ease-out;
+  }
+
+  :host(.is-closing) .drawer-panel {
+    animation: drawer-out 0.25s ease-in forwards;
   }
 
   /* ─── ハンドル ───────────────────────────────────────────────── */

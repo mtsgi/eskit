@@ -46,16 +46,26 @@ export default class ESKitDrawerElement extends HTMLElement {
 
   /** ドロワーを開く (内容をリフレッシュしてから表示) */
   open() {
+    // 閉じるアニメーション中に再度開く場合はキャンセル
+    this.classList.remove("is-closing");
     this.#refresh();
     this.#updateTime();
     this.setAttribute("open", "");
     window.System?.events.emit("drawer:open");
   }
 
-  /** ドロワーを閉じる */
+  /** ドロワーを閉じる (退場アニメーション後に非表示) */
   close() {
-    this.removeAttribute("open");
-    window.System?.events.emit("drawer:close");
+    if (!this.isOpen || this.classList.contains("is-closing")) return;
+    this.classList.add("is-closing");
+    const panel = this.shadowRoot.querySelector(".drawer-panel");
+    const done = () => {
+      this.removeAttribute("open");
+      this.classList.remove("is-closing");
+      window.System?.events.emit("drawer:close");
+      panel?.removeEventListener("animationend", done);
+    };
+    panel?.addEventListener("animationend", done, { once: true });
   }
 
   /** ドロワーの開閉をトグルする */

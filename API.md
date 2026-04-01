@@ -19,7 +19,7 @@ await System.loadApp("apps/myapp/");         // アプリを起動 → UUID を�
 System.closeApp(uuid);                        // アプリを終了
 System.getApp(uuid);                          // アプリインスタンスを取得
 System.listProcesses();                       // [{uuid, name, state}, ...]
-System.notify({ title, message, duration });  // 通知を表示
+System.notify({ title, message, duration });  // notification:show イベントを発行 (eskit-notification は Phase 4 で実装予定)
 System.sendMessage(targetUuid, data);         // アプリ間 IPC
 System.setShellMode("desktop" | "mobile");   // シェルモードを手動切替
 System.nextZIndex();                          // フォーカス用 z-index を取得 (呼ぶたびに増加)

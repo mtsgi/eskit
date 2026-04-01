@@ -18,7 +18,7 @@
 
 ---
 
-## 現状 (Phase 1 実装済み)
+## 現状 (Phase 1～3.5 実装済み)
 
 | ファイル | 実装内容 |
 |----------|---------|
@@ -46,6 +46,10 @@
 | `system/kitstrap2.js` | Singleton CSSStyleSheet — kitstrap2 を Shadow DOM 全体に共有 |
 | `system/kitstrap2.css` | kitstrap2 CSS フレームワーク本体 |
 | `system/main.css` | `--eskit-*` → `var(--kit-*)` CSS 変数ブリッジ |
+| `system/elements/context-menu/` | `eskit-context-menu` — 右クリックコンテキストメニュー (Phase 3) |
+| `system/elements/beacon/` | `eskit-beacon` — グローバル検索オーバーレイ (Phase 3) |
+| `system/elements/quick-settings/` | `eskit-quick-settings` — クイック設定パネル (Phase 3) |
+| `system/hamon.js` | Hamon — リアクティブテンプレートエンジン (Phase 3.5) |
 
 ### シェルモード (ESKitShellMode)
 
@@ -124,10 +128,11 @@ class ESKitWindowElement extends HTMLElement {
 
 ---
 
-## Phase 3: Desktop Shell — シェル UI
+## Phase 3: Desktop Shell — シェル UI ✅
 
 **目的:** コンテキストメニュー・スポットライト検索・クイック設定・ウィンドウアニメーションを追加し、モダン OS らしいシェル体験を実現する。  
-**完了条件:** 右クリックメニュー・Ctrl+Space 検索・クイック設定パネル・ウィンドウ開閉アニメーションが動作する。
+**完了条件:** 右クリックメニュー・Ctrl+Space 検索・クイック設定パネル・ウィンドウ開閉アニメーションが動作する。  
+**ステータス:** 実装済み
 
 > **Note:** タスクバー (`eskit-taskbar`) とランチャー UI 刷新 (`eskit-launcher`) は Phase 1 で実装済み。
 
@@ -195,10 +200,11 @@ toggle(anchorEl: HTMLElement): void
 
 ---
 
-## Phase 3.5: Hamon — リアクティブテンプレートエンジン
+## Phase 3.5: Hamon — リアクティブテンプレートエンジン ✅
 
 **目的:** ESKit アプリ開発における以下の課題を解決するリアクティブテンプレートエンジン「Hamon」を導入する。  
-**完了条件:** Hamon テンプレートで記述したアプリが、シグナル変更で自動 DOM 更新・イベント自動登録/解除・条件分岐のリアクティブ切替を行える。既存の文字列テンプレートアプリも変更なしで動作する (後方互換)。
+**完了条件:** Hamon テンプレートで記述したアプリが、シグナル変更で自動 DOM 更新・イベント自動登録/解除・条件分岐のリアクティブ切替を行える。既存の文字列テンプレートアプリも変更なしで動作する (後方互換)。  
+**ステータス:** 実装済み
 
 ### 解決する課題
 
