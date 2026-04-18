@@ -166,7 +166,7 @@ hide(): void
 - 候補クリック → `System.loadApp(manifest._dir)` → `hide()`
 - Enter キーで最上位候補を起動
 - `keydown` を `window` でキャプチャ: `Ctrl+Space` でトグル、`Escape` で閉じる
-- 将来的に VFS ファイル検索も統合 (Phase 5)
+- 将来的に VFS ファイル検索も統合 (Phase 6)
 
 ### `system/elements/quick-settings/` (新規)
 
@@ -179,8 +179,8 @@ toggle(anchorEl: HTMLElement): void
 - CSS Anchor Positioning で時計ボタンの直上に `position-area: top span-right` 配置
 - パネル内容:
   - **シェルモード:** desktop / mobile の切替トグル
-  - **明暗テーマ:** OS に連動 (`prefers-color-scheme`) / ライト / ダーク の 3 択 (Phase 4 テーマ実装後に有効化)
-  - **システム情報:** 起動中プロセス数、FS 使用量 (Phase 4 連携)
+  - **明暗テーマ:** OS に連動 (`prefers-color-scheme`) / ライト / ダーク の 3 択 (Phase 5 テーマ実装後に有効化)
+  - **システム情報:** 起動中プロセス数、FS 使用量 (Phase 5 連携)
 - `ESKitTaskbarElement` が時計要素 (`#clock`) のクリックイベントで `toggle()` を呼ぶ
 - 外側クリック / Escape で `hide()`
 
@@ -373,7 +373,101 @@ export default class CounterApp extends ESKitApp {
 
 ---
 
-## Phase 4: System Services — システムサービス
+## Phase 4: Multi-User Foundation — ユーザー概念導入
+
+**目的:** ユーザー概念を導入し、ログインセッション・ホームディレクトリ分離・所有者/モードに基づくアクセス制御を実現する。  
+**完了条件:** 管理者作成・ログイン・ユーザー切替・ユーザーごとの権限分離・`/home/{userId}` 分離が動作し、`/home/user` 依存が除去される。  
+**ステータス:** 着手中
+
+### 決定事項
+
+- **パス規約:** `/home/user` は廃止し、`/home/{userId}` に統一
+- **認証:** ローカル完結のパスワードハッシュ (Web Crypto / PBKDF2)
+- **ロール:** 管理者 1 名 + 一般ユーザー
+- **共有領域:** `/shared` を導入し、アクセス制御対象に含める
+- **権限分離:** 同一アプリでもユーザーごとに runtime 権限を独立管理
+
+### `system/users.js` (新規)
+
+**ESKitUsers** — ユーザー管理・セッション管理:
+```js
+class ESKitUsers {
+  async init(): Promise<void>
+  list(): User[]
+  getCurrent(): User | null
+  async create({ id, name, password, isAdmin }): Promise<User>
+  async delete(id: string): Promise<void>
+  async login(id: string, password: string): Promise<User>
+  logout(): void
+}
+```
+
+**User モデル:**
+```ts
+type User = {
+  id: string;
+  name: string;
+  isAdmin: boolean;
+  passwordHash: string;
+  salt: string;
+  createdAt: number;
+  disabled?: boolean;
+};
+```
+
+- ストレージ: `localStorage` (ユーザー一覧 / 現在セッション)
+- ハッシュ: PBKDF2 (SHA-256) + ランダム salt
+- 初回起動時は管理者作成フローを必須化
+
+### `system/system.js` — 起動シーケンス変更
+
+```text
+ESKitSystem.constructor()
+  └─ #boot() [async]
+       ├─ fs.init()
+       ├─ users.init()
+       ├─ #initBaseDirs()         /home, /shared, /system, /apps
+       ├─ #ensureBootstrapAdmin() 初回管理者作成
+       ├─ #showLoginScreen()      ログイン完了までシェルを抑止
+       ├─ #initCurrentUserDirs()  /home/{userId}/desktop など
+       ├─ new ESKitWindowSystem
+       ├─ #registerBuiltinApps()
+       ├─ initUI()
+       └─ events.emit("system:ready")
+```
+
+### `system/filesystem.js` — owner/mode 導入
+
+**エントリ形式拡張:**
+```js
+{ path, parent, type, content, owner, mode, createdAt, modifiedAt }
+```
+
+- デフォルト mode: ESKit 独自の可読オブジェクト形式
+  - file: `{ owner: {read:true, write:true}, others: {read:false, write:false} }`
+  - dir:  `{ owner: {read:true, write:true}, others: {read:true, write:false} }`
+- `stat()` 返却に `owner`, `mode` を追加
+- `read/write/readdir/remove/rename` でアクセス制御を実施
+  - 一般ユーザー: 自身のホーム中心
+  - 管理者: システムポリシー上許可された範囲で横断アクセス可
+
+### ログイン UI / 切替 UI
+
+- `system/elements/login-screen/` (新規): ログイン画面
+- `system/elements/quick-settings/` (変更): 現在ユーザー表示 / ログアウト / 切替
+- `system/elements/drawer/` (変更): モバイル導線の追加
+
+### マイグレーションと互換
+
+- 旧 `/home/user` 依存コードは段階的に `/home/{userId}` へ置換
+- 旧権限キーはユーザー単位キーへ移行 (`userId` を含む)
+- 破壊的変更を許容する開発方針に従い、必要時は初期化リセットを許容
+
+**関連ファイル:** `system/users.js` (新規), `system/system.js` (変更), `system/filesystem.js` (変更), `system/permissions.js` (変更), `system/elements/login-screen/` (新規), `system/elements/quick-settings/` (変更), `system/elements/drawer/` (変更), `apps/test/` (変更)
+
+---
+
+## Phase 5: System Services — システムサービス
 
 **目的:** テーマシステム、通知、i18n、設定アプリの基盤サービスを実装する。  
 **完了条件:** 組み込み・外部テーマの切替で OS 全体の見た目が即座に変わり、通知が表示・自動消去され、言語切替が反映される。
@@ -470,7 +564,7 @@ class ESKitI18n {
 
 ---
 
-## Phase 5: Developer Experience & Apps — 開発者体験とサンプルアプリ
+## Phase 6: Developer Experience & Apps — 開発者体験とサンプルアプリ
 
 **目的:** アプリ開発の実例を示し、外部アプリインストール機能を実装し、ドキュメントを整備する。  
 **完了条件:** ドキュメントだけ読んで新規アプリを作成・登録でき、外部 URL からアプリをインストールできる。
@@ -558,14 +652,15 @@ system/
   kitstrap2.js          (実装済み)
   kitstrap2.css         (実装済み)
   hamon.js              (Phase 3.5)
-  theme.js              (Phase 4)
-  themes/               (Phase 4)
+  users.js              (Phase 4)
+  theme.js              (Phase 5)
+  themes/               (Phase 5)
     light.json
     dark.json
-  i18n.js               (Phase 4)
+  i18n.js               (Phase 5)
   i18n/
-    ja.json             (Phase 4)
-    en.json             (Phase 4)
+    ja.json             (Phase 5)
+    en.json             (Phase 5)
   elements/
     desktop/
     window/
@@ -577,13 +672,14 @@ system/
     context-menu/       (Phase 3)
     beacon/             (Phase 3)
     quick-settings/     (Phase 3)
-    notification/       (Phase 4)
+    login-screen/       (Phase 4)
+    notification/       (Phase 5)
 apps/
   test/
   welcome/
-  settings/             (Phase 4)
-  notepad/              (Phase 5)
-  calculator/           (Phase 5)
-  clock/                (Phase 5)
-  filemanager/          (Phase 5)
+  settings/             (Phase 5)
+  notepad/              (Phase 6)
+  calculator/           (Phase 6)
+  clock/                (Phase 6)
+  filemanager/          (Phase 6)
 ```

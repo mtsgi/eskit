@@ -19,17 +19,22 @@ await System.loadApp("apps/myapp/");         // アプリを起動 → UUID を�
 System.closeApp(uuid);                        // アプリを終了
 System.getApp(uuid);                          // アプリインスタンスを取得
 System.listProcesses();                       // [{uuid, name, state}, ...]
-System.notify({ title, message, duration });  // notification:show イベントを発行 (eskit-notification は Phase 4 で実装予定)
+System.notify({ title, message, duration });  // notification:show イベントを発行
 System.sendMessage(targetUuid, data);         // アプリ間 IPC
 System.setShellMode("desktop" | "mobile");   // シェルモードを手動切替
 System.nextZIndex();                          // フォーカス用 z-index を取得 (呼ぶたびに増加)
 System.generateUUID();                        // crypto.randomUUID() のラッパー
+System.currentUser;                           // 現在ログイン中ユーザー ({id, name, isAdmin, createdAt} | null)
+System.homeDir();                             // 現在ユーザーのホームパス (例: "/home/alice")
+System.homeDir("bob");                        // 指定ユーザーのホームパス
+System.logout();                              // ログアウトしてログイン画面に戻る
 
 // サブシステムへのアクセス
 System.events       // ESKitEventBus
 System.fs           // ESKitFileSystem
 System.registry     // ESKitRegistry
 System.permissions  // ESKitPermissions
+System.users        // ESKitUsers
 System.shellMode    // ESKitShellMode
 System.WindowSystem // ESKitWindowSystem (ブート後)
 ```
@@ -40,8 +45,38 @@ System.WindowSystem // ESKitWindowSystem (ブート後)
 
 ```js
 await System.ready;
-// ブート完了後の処理
+console.log(System.currentUser); // { id, name, isAdmin, createdAt }
 ```
+
+---
+
+## `System.users` — ユーザー / セッション
+
+ユーザー管理とログインセッションを扱う `ESKitUsers` インスタンスです。
+
+```js
+System.users.hasUsers();
+System.users.list();
+System.users.getCurrent();
+
+await System.users.create({
+  id: "alice",
+  name: "Alice",
+  password: "password123",
+  isAdmin: false,
+});
+
+await System.users.login("alice", "password123");
+await System.users.delete("alice");
+System.users.logout();
+```
+
+### ユーザー仕様
+
+- 初回起動時は管理者ユーザー作成が必須です
+- セッションは `localStorage` に保持されます
+- パスワードは PBKDF2 (SHA-256) でハッシュ化して保存されます
+- 最後の管理者ユーザーは削除できません
 
 ---
 
@@ -183,20 +218,29 @@ win.setTitle(title); // タイトルバーのテキストを更新
 
 IndexedDB 上に実装されたファイルシステム (`ESKitFileSystem`) です。
 
+### パス規約
+
+- ユーザーホーム: `/home/{userId}`
+- 共有領域: `/shared`
+- システム領域: `/system`, `/apps`
+- 便利メソッド: `System.homeDir()` で現在ユーザーのホームパスを取得可能
+
 ### 書き込み
 
 ```js
+const home = System.homeDir();
+
 // テキスト
-await System.fs.writeFile("/home/user/note.txt", "Hello, ESKit!");
+await System.fs.writeFile(`${home}/note.txt`, "Hello, ESKit!");
 
 // バイナリ (Uint8Array)
-await System.fs.writeFile("/home/user/icon.png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...]));
+await System.fs.writeFile(`${home}/icon.png`, new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...]));
 
 // ArrayBuffer
-await System.fs.writeFile("/home/user/data.bin", arrayBuffer);
+await System.fs.writeFile(`${home}/data.bin`, arrayBuffer);
 
 // Blob
-await System.fs.writeFile("/home/user/file.dat", blob);
+await System.fs.writeFile(`${home}/file.dat`, blob);
 ```
 
 `writeFile` はすべての入力値を内部的に `Uint8Array` に変換して保存します。親ディレクトリが存在しない場合は自動作成されます。
@@ -204,38 +248,67 @@ await System.fs.writeFile("/home/user/file.dat", blob);
 ### 読み込み
 
 ```js
+const home = System.homeDir();
+
 // テキストとして読む (UTF-8 デコード)
-const text  = await System.fs.readFile("/home/user/note.txt");
+const text  = await System.fs.readFile(`${home}/note.txt`);
 
 // バイナリ (Uint8Array) として読む
-const bytes = await System.fs.readFileAsBytes("/home/user/icon.png");
+const bytes = await System.fs.readFileAsBytes(`${home}/icon.png`);
 ```
 
 ### ディレクトリ操作
 
 ```js
-await System.fs.mkdir("/home/user/docs", { recursive: true });
+const home = System.homeDir();
+await System.fs.mkdir(`${home}/docs`, { recursive: true });
 
-const entries = await System.fs.readdir("/home/user");
-// → [{ name: "docs", type: "dir", path: "/home/user/docs" }, ...]
+const entries = await System.fs.readdir(home);
+// → [{ name: "docs", type: "dir", path: "/home/alice/docs" }, ...]
 ```
 
 ### ファイル情報・存在確認
 
 ```js
-const stat   = await System.fs.stat("/home/user/note.txt");
-// → { path, type: "file"|"dir", size: number, createdAt: number, modifiedAt: number }
+const home = System.homeDir();
+const stat = await System.fs.stat(`${home}/note.txt`);
+// → {
+//      path,
+//      type: "file"|"dir",
+//      size: number,
+//      owner: string,
+//      mode: {
+//        owner:  { read: boolean, write: boolean },
+//        others: { read: boolean, write: boolean }
+//      },
+//      createdAt: number,
+//      modifiedAt: number
+//    }
 
-const exists = await System.fs.exists("/home/user/note.txt"); // boolean
+const exists = await System.fs.exists(`${home}/note.txt`); // boolean
 ```
+
+### `mode`
+
+```js
+{
+  owner:  { read: true, write: true },
+  others: { read: false, write: false }
+}
+```
+
+- `owner.read / owner.write`: 所有者の読み書き可否
+- `others.read / others.write`: 非所有者の読み書き可否
 
 ### 削除・リネーム
 
 ```js
-await System.fs.remove("/home/user/note.txt");
-await System.fs.remove("/home/user/docs", { recursive: true });
+const home = System.homeDir();
 
-await System.fs.rename("/home/user/old.txt", "/home/user/new.txt");
+await System.fs.remove(`${home}/note.txt`);
+await System.fs.remove(`${home}/docs`, { recursive: true });
+
+await System.fs.rename(`${home}/old.txt`, `${home}/new.txt`);
 ```
 
 ### 初期ディレクトリ
@@ -244,8 +317,10 @@ ESKit が起動時に自動作成するディレクトリ:
 
 | パス | 用途 |
 |------|------|
-| `/home/user` | ユーザーホームディレクトリ |
-| `/home/user/desktop` | デスクトップ |
+| `/home` | ユーザーホームのルート |
+| `/home/{userId}` | ユーザーホームディレクトリ |
+| `/home/{userId}/desktop` | デスクトップ |
+| `/shared` | 共有領域 |
 | `/system` | システムファイル |
 | `/apps` | アプリ配置領域 |
 
@@ -261,7 +336,7 @@ const off = System.events.on("app:opened", ({ uuid, name }) => { ... });
 off(); // 購読解除
 
 // 一度だけ受信
-System.events.once("system:ready", () => { ... });
+System.events.once("system:ready", ({ user }) => { ... });
 
 // 手動購読解除
 System.events.off("my-event", handler);
@@ -274,9 +349,12 @@ System.events.emit("my-event", { data: 123 });
 
 | イベント | ペイロード | 発行タイミング |
 |---------|----------|--------------|
-| `system:ready` | — | ブート完了 |
+| `system:ready` | `{user}` | ブート完了 |
 | `system:theme-changed` | `{name}` | テーマ変更 |
 | `system:locale-changed` | `{lang}` | 言語変更 |
+| `user:created` | `{user}` | ユーザー作成 |
+| `user:logged-in` | `{user}` | ログイン完了 |
+| `user:logged-out` | `{user}` | ログアウト |
 | `app:opened` | `{uuid, name}` | アプリ起動 |
 | `app:closed` | `{uuid}` | アプリ終了 |
 | `app:focused` | `{uuid}` | ウィンドウフォーカス変更 |
@@ -314,7 +392,7 @@ const apps = System.registry.list();
 // 検索 (name / description / id に対してあいまい検索)
 const results = System.registry.search("notepad");
 
-// 外部 URL からインストール (Phase 5)
+// 外部 URL からインストール (Phase 6)
 await System.registry.registerFromUrl("https://example.com/myapp/");
 ```
 
@@ -339,6 +417,8 @@ System.permissions.deny(uuid, "fs.read");          // 拒否のショートハ�
 // アプリ終了時にセッションエントリをクリア (localStorage は維持)
 System.permissions.revoke(uuid);
 ```
+
+権限の永続化キーはユーザー単位で分離されます（同じアプリでもログインユーザーごとに許可状態が独立します）。
 
 ---
 
@@ -428,15 +508,20 @@ Install-time チェック (define.json の permissions[] 宣言)
 |------|------|
 | `fs.read` | 仮想ファイルシステムの読み取り (`readFile`, `readFileAsBytes`, `readdir`, `stat`, `exists`) |
 | `fs.write` | 仮想ファイルシステムへの書き込み (`writeFile`, `mkdir`, `remove`, `rename`) |
+| `fs.read.all` | 管理者向け: 他ユーザー領域を含む広域読み取り |
+| `fs.write.all` | 管理者向け: 他ユーザー領域を含む広域書き込み |
+| `fs.shared` | `/shared` へのアクセス |
 | `notifications` | 通知の表示 (`System.notify`, `this.showNotification`) |
 | `ipc` | 他のアプリへのメッセージ送信 (`System.sendMessage`) |
 | `network` | 外部 URL への fetch |
 | `system.info` | システム情報の取得 (`System.listProcesses`) |
 | `clipboard` | クリップボードへのアクセス (`navigator.clipboard.*`) |
+| `user.info` | 現在ユーザー情報の取得 |
+| `user.manage` | ユーザー作成・削除などの管理操作 |
 
 ---
 
-## 外部アプリのインストール (Phase 5)
+## 外部アプリのインストール (Phase 6)
 
 URL を指定してサードパーティアプリをインストールできます。
 

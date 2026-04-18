@@ -7,11 +7,13 @@ import kitstrap2Sheet from "system/kitstrap2.js";
  *
  * タスクバーの時計クリックで開閉する Popover API パネル。
  * シェルモード切替・プロセス数表示を提供する。
- * テーマ・言語設定は Phase 4 で有効化。
+ * テーマ・言語設定は Phase 5 で有効化。
  */
 export default class ESKitQuickSettingsElement extends HTMLElement {
   #panelEl = null;
   #offModeChanged = null;
+  #offUserLoggedIn = null;
+  #offUserLoggedOut = null;
 
   constructor() {
     super();
@@ -28,6 +30,8 @@ export default class ESKitQuickSettingsElement extends HTMLElement {
 
   disconnectedCallback() {
     this.#offModeChanged?.();
+    this.#offUserLoggedIn?.();
+    this.#offUserLoggedOut?.();
     document.removeEventListener("pointerdown", this.#onPointerDown, true);
     document.removeEventListener("keydown", this.#onKeyDown, true);
   }
@@ -45,6 +49,7 @@ export default class ESKitQuickSettingsElement extends HTMLElement {
     // モバイルモード判定: -mobile クラスで CSS が切り替わる
     this.#panelEl.classList.toggle("-mobile", window.System?.shellMode.isMobile ?? false);
     this.#syncMode();
+    this.#updateUserInfo();
     this.#updateProcessCount();
     this.#panelEl.showPopover();
     document.addEventListener("pointerdown", this.#onPointerDown, true);
@@ -84,11 +89,22 @@ export default class ESKitQuickSettingsElement extends HTMLElement {
       this.#syncMode();
     });
 
+    this.shadowRoot.getElementById("logout-btn").addEventListener("click", () => {
+      this.hide();
+      window.System?.logout();
+    });
+
     // モード変更イベントの購読
     const sys = window.System;
     if (sys) {
       this.#offModeChanged = sys.events.on("shell:mode-changed", () => {
         this.#syncMode();
+      });
+      this.#offUserLoggedIn = sys.events.on("user:logged-in", () => {
+        this.#updateUserInfo();
+      });
+      this.#offUserLoggedOut = sys.events.on("user:logged-out", () => {
+        this.#updateUserInfo();
       });
     }
 
@@ -111,6 +127,17 @@ export default class ESKitQuickSettingsElement extends HTMLElement {
     const count = window.System?.listProcesses().length ?? 0;
     const el = this.shadowRoot.getElementById("process-count");
     if (el) el.textContent = count;
+  }
+
+  #updateUserInfo() {
+    const current = window.System?.currentUser;
+    const el = this.shadowRoot.getElementById("current-user");
+    if (!el) return;
+    if (!current) {
+      el.textContent = "(未ログイン)";
+      return;
+    }
+    el.textContent = `${current.name} (${current.id})${current.isAdmin ? " [admin]" : ""}`;
   }
 
   #onPointerDown = (e) => {

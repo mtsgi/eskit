@@ -144,6 +144,13 @@ export default class SystemVerifier extends ESKitApp {
     if (!cond) throw new Error(msg);
   }
 
+  #homePath(suffix = "") {
+    const userId = System?.currentUser?.id;
+    if (!userId) throw new Error("current user is not available");
+    const root = `/home/${userId}`;
+    return suffix ? `${root}/${suffix}` : root;
+  }
+
   // ─── EventBus テスト ──────────────────────────────────────────────────────
 
   async #testEventBusOnEmit() {
@@ -183,23 +190,25 @@ export default class SystemVerifier extends ESKitApp {
 
   async #testFsMkdir() {
     await this.#test("FS: mkdir + exists", async () => {
-      await System.fs.mkdir("/home/user/.eskit-verify", { recursive: true });
-      this.#assert(await System.fs.exists("/home/user/.eskit-verify"), "dir not found");
+      const dir = this.#homePath(".eskit-verify");
+      await System.fs.mkdir(dir, { recursive: true });
+      this.#assert(await System.fs.exists(dir), "dir not found");
     });
   }
 
   async #testFsWriteReadText() {
     await this.#test("FS: writeFile (text) + readFile", async () => {
       const data = "Hello, ESKit! 🎉";
-      await System.fs.writeFile("/home/user/.eskit-verify/hello.txt", data);
-      const read = await System.fs.readFile("/home/user/.eskit-verify/hello.txt");
+      const file = this.#homePath(".eskit-verify/hello.txt");
+      await System.fs.writeFile(file, data);
+      const read = await System.fs.readFile(file);
       this.#assert(read === data, `got: ${read}`);
     });
   }
 
   async #testFsStat() {
     await this.#test("FS: stat (size)", async () => {
-      const stat = await System.fs.stat("/home/user/.eskit-verify/hello.txt");
+      const stat = await System.fs.stat(this.#homePath(".eskit-verify/hello.txt"));
       const expectedSize = new TextEncoder().encode("Hello, ESKit! 🎉").byteLength;
       this.#assert(stat.size === expectedSize, `size=${stat.size}, expected=${expectedSize}`);
       this.#assert(stat.type === "file", `type=${stat.type}`);
@@ -210,7 +219,7 @@ export default class SystemVerifier extends ESKitApp {
 
   async #testFsReaddir() {
     await this.#test("FS: readdir", async () => {
-      const entries = await System.fs.readdir("/home/user/.eskit-verify");
+      const entries = await System.fs.readdir(this.#homePath(".eskit-verify"));
       this.#assert(entries.length >= 1, `entries.length=${entries.length}`);
       this.#assert(entries.some((e) => e.name === "hello.txt"), "hello.txt not in readdir");
       return `${entries.length} entries`;
@@ -219,19 +228,22 @@ export default class SystemVerifier extends ESKitApp {
 
   async #testFsRename() {
     await this.#test("FS: rename", async () => {
+      const from = this.#homePath(".eskit-verify/hello.txt");
+      const to = this.#homePath(".eskit-verify/renamed.txt");
       await System.fs.rename(
-        "/home/user/.eskit-verify/hello.txt",
-        "/home/user/.eskit-verify/renamed.txt",
+        from,
+        to,
       );
-      this.#assert(await System.fs.exists("/home/user/.eskit-verify/renamed.txt"), "renamed not found");
-      this.#assert(!await System.fs.exists("/home/user/.eskit-verify/hello.txt"), "old still exists");
+      this.#assert(await System.fs.exists(to), "renamed not found");
+      this.#assert(!await System.fs.exists(from), "old still exists");
     });
   }
 
   async #testFsRemove() {
     await this.#test("FS: remove (recursive)", async () => {
-      await System.fs.remove("/home/user/.eskit-verify", { recursive: true });
-      this.#assert(!await System.fs.exists("/home/user/.eskit-verify"), "dir still exists after remove");
+      const dir = this.#homePath(".eskit-verify");
+      await System.fs.remove(dir, { recursive: true });
+      this.#assert(!await System.fs.exists(dir), "dir still exists after remove");
     });
   }
 
@@ -240,9 +252,11 @@ export default class SystemVerifier extends ESKitApp {
   async #testFsWriteBinary() {
     await this.#test("FS: writeFile (Uint8Array)", async () => {
       const bytes = new Uint8Array([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF]);
-      await System.fs.mkdir("/home/user/.eskit-verify-bin", { recursive: true });
-      await System.fs.writeFile("/home/user/.eskit-verify-bin/data.bin", bytes);
-      this.#assert(await System.fs.exists("/home/user/.eskit-verify-bin/data.bin"), "bin not found");
+      const dir = this.#homePath(".eskit-verify-bin");
+      const file = this.#homePath(".eskit-verify-bin/data.bin");
+      await System.fs.mkdir(dir, { recursive: true });
+      await System.fs.writeFile(file, bytes);
+      this.#assert(await System.fs.exists(file), "bin not found");
       return "6 bytes";
     });
   }
@@ -250,12 +264,14 @@ export default class SystemVerifier extends ESKitApp {
   async #testFsReadBinary() {
     await this.#test("FS: readFileAsBytes (Uint8Array 一致)", async () => {
       const expected = new Uint8Array([0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0xFF]);
-      const read = await System.fs.readFileAsBytes("/home/user/.eskit-verify-bin/data.bin");
+      const file = this.#homePath(".eskit-verify-bin/data.bin");
+      const dir = this.#homePath(".eskit-verify-bin");
+      const read = await System.fs.readFileAsBytes(file);
       this.#assert(read.length === expected.length, `length=${read.length}`);
       for (let i = 0; i < expected.length; i++) {
         this.#assert(read[i] === expected[i], `byte[${i}]: ${read[i]} ≠ ${expected[i]}`);
       }
-      await System.fs.remove("/home/user/.eskit-verify-bin", { recursive: true });
+      await System.fs.remove(dir, { recursive: true });
       return `${read.length} bytes match`;
     });
   }
@@ -264,10 +280,11 @@ export default class SystemVerifier extends ESKitApp {
     await this.#test("FS: ArrayBuffer → writeFile → readFile", async () => {
       const text   = "ArrayBuffer test 🚀";
       const buffer = new TextEncoder().encode(text).buffer;
-      await System.fs.writeFile("/home/user/.eskit-verify-tmp.txt", buffer);
-      const result = await System.fs.readFile("/home/user/.eskit-verify-tmp.txt");
+      const file = this.#homePath(".eskit-verify-tmp.txt");
+      await System.fs.writeFile(file, buffer);
+      const result = await System.fs.readFile(file);
       this.#assert(result === text, `got: ${result}`);
-      await System.fs.remove("/home/user/.eskit-verify-tmp.txt");
+      await System.fs.remove(file);
     });
   }
 

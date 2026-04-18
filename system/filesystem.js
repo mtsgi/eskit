@@ -7,7 +7,19 @@
  *   インデックス: "parent" (ディレクトリ一覧用)
  *
  * エントリ形式:
- *   { path, parent, type: "file"|"dir", content: Uint8Array|null, createdAt, modifiedAt }
+ *   {
+ *     path,
+ *     parent,
+ *     type: "file"|"dir",
+ *     content: Uint8Array|null,
+ *     owner: string,
+ *     mode: {
+ *       owner:  { read: boolean, write: boolean },
+ *       others: { read: boolean, write: boolean },
+ *     },
+ *     createdAt,
+ *     modifiedAt,
+ *   }
  *
  * content は常に Uint8Array として保存される。
  * - テキスト: TextEncoder で encode / TextDecoder で decode
@@ -18,6 +30,18 @@ export default class ESKitFileSystem {
   static #DB_NAME    = "eskit-fs";
   static #DB_VERSION = 1;          // 開発中につきバージョン固定、破壊的変更を許可
   static #STORE      = "files";
+  static #MODE_FILE_DEFAULT = Object.freeze({
+    owner:  Object.freeze({ read: true, write: true }),
+    others: Object.freeze({ read: false, write: false }),
+  });
+  static #MODE_DIR_DEFAULT  = Object.freeze({
+    owner:  Object.freeze({ read: true, write: true }),
+    others: Object.freeze({ read: true, write: false }),
+  });
+  static #MODE_HOME_DIR_DEFAULT = Object.freeze({
+    owner:  Object.freeze({ read: true, write: true }),
+    others: Object.freeze({ read: false, write: false }),
+  });
 
   #db = null;
 
@@ -58,7 +82,10 @@ export default class ESKitFileSystem {
    */
   async writeFile(path, content) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "write");
+
     const parent = this.#parentOf(normalPath);
+    await this.#assertAccess(parent, "write");
 
     if (!await this.exists(parent)) {
       await this.mkdir(parent, { recursive: true });
@@ -72,6 +99,8 @@ export default class ESKitFileSystem {
       parent,
       type: "file",
       content: bytes,
+      owner: existing?.owner ?? this.#ownerForPath(normalPath),
+      mode: this.#normalizeMode(existing?.mode, normalPath, "file"),
       createdAt: existing?.createdAt ?? now,
       modifiedAt: now,
     });
@@ -95,6 +124,8 @@ export default class ESKitFileSystem {
    */
   async readFileAsBytes(path) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "read");
+
     const entry = await this.#get(normalPath);
     if (!entry) throw new Error(`ENOENT: no such file: ${normalPath}`);
     if (entry.type !== "file") throw new Error(`EISDIR: is a directory: ${normalPath}`);
@@ -108,6 +139,8 @@ export default class ESKitFileSystem {
    */
   async mkdir(path, { recursive = false } = {}) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "write");
+
     if (normalPath === "/") return;
 
     if (recursive) {
@@ -132,6 +165,8 @@ export default class ESKitFileSystem {
    */
   async readdir(path) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "read");
+
     const tx = this.#db.transaction(ESKitFileSystem.#STORE, "readonly");
     const store = tx.objectStore(ESKitFileSystem.#STORE);
     const index = store.index("parent");
@@ -146,16 +181,20 @@ export default class ESKitFileSystem {
   /**
    * ファイル / ディレクトリの情報を取得する。
    * @param {string} path 絶対パス
-   * @returns {Promise<{path, type, size, createdAt, modifiedAt}>}
+    * @returns {Promise<{path, type, size, owner, mode, createdAt, modifiedAt}>}
    */
   async stat(path) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "read");
+
     const entry = await this.#get(normalPath);
     if (!entry) throw new Error(`ENOENT: no such file or directory: ${normalPath}`);
     return {
       path:       entry.path,
       type:       entry.type,
       size:       entry.content?.byteLength ?? 0,
+      owner:      entry.owner ?? this.#ownerForPath(entry.path),
+      mode:       this.#normalizeMode(entry.mode, entry.path, entry.type),
       createdAt:  entry.createdAt,
       modifiedAt: entry.modifiedAt,
     };
@@ -168,6 +207,8 @@ export default class ESKitFileSystem {
    */
   async exists(path) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "read");
+
     if (normalPath === "/") return true;
     const entry = await this.#get(normalPath);
     return entry !== undefined;
@@ -180,6 +221,8 @@ export default class ESKitFileSystem {
    */
   async remove(path, { recursive = false } = {}) {
     const normalPath = this.#normalize(path);
+    await this.#assertAccess(normalPath, "write");
+
     const entry = await this.#get(normalPath);
     if (!entry) throw new Error(`ENOENT: no such file or directory: ${normalPath}`);
 
@@ -202,6 +245,10 @@ export default class ESKitFileSystem {
   async rename(oldPath, newPath) {
     const from = this.#normalize(oldPath);
     const to   = this.#normalize(newPath);
+
+    await this.#assertAccess(from, "write");
+    await this.#assertAccess(to, "write");
+
     const entry = await this.#get(from);
     if (!entry) throw new Error(`ENOENT: no such file or directory: ${from}`);
 
@@ -213,7 +260,14 @@ export default class ESKitFileSystem {
     const tx = this.#db.transaction(ESKitFileSystem.#STORE, "readwrite");
     const store = tx.objectStore(ESKitFileSystem.#STORE);
     await this.#promisify(store.delete(from));
-    await this.#promisify(store.put({ ...entry, path: to, parent: newParent, modifiedAt: Date.now() }));
+    await this.#promisify(store.put({
+      ...entry,
+      path: to,
+      parent: newParent,
+      owner: entry.owner ?? this.#ownerForPath(to),
+      mode: this.#normalizeMode(entry.mode, to, entry.type),
+      modifiedAt: Date.now(),
+    }));
   }
 
   // ─── 静的ユーティリティ ────────────────────────────────────────────────────
@@ -265,9 +319,102 @@ export default class ESKitFileSystem {
       parent: this.#parentOf(normalPath),
       type: "dir",
       content: null,
+      owner: this.#ownerForPath(normalPath),
+      mode: this.#defaultModeFor(normalPath, "dir"),
       createdAt: now,
       modifiedAt: now,
     });
+  }
+
+  async #assertAccess(normalPath, action) {
+    if (normalPath === "/") return;
+
+    const user = this.#currentUser();
+    if (!user) return;
+    if (user.isAdmin) return;
+
+    // システム領域は読み取りのみ許可
+    if (normalPath.startsWith("/system") || normalPath.startsWith("/apps")) {
+      if (action === "read") return;
+      throw new Error(`EACCES: ${action} denied: ${normalPath}`);
+    }
+
+    // 共有領域は管理者のみ書き込み可
+    if (normalPath === "/shared" || normalPath.startsWith("/shared/")) {
+      if (action === "read") return;
+      throw new Error(`EACCES: ${action} denied: ${normalPath}`);
+    }
+
+    // ホーム配下は本人ディレクトリのみ許可
+    if (normalPath.startsWith("/home/")) {
+      const ownerFromPath = normalPath.split("/").filter(Boolean)[1] ?? null;
+      if (ownerFromPath && ownerFromPath !== user.id) {
+        throw new Error(`EACCES: ${action} denied: ${normalPath}`);
+      }
+    }
+
+    const entry = await this.#get(normalPath);
+    if (!entry) return;
+
+    const owner = entry.owner ?? this.#ownerForPath(entry.path);
+    const mode = this.#normalizeMode(entry.mode, entry.path, entry.type);
+    const scope = owner === user.id ? mode.owner : mode.others;
+    const allowed = action === "read" ? scope.read : scope.write;
+
+    if (!allowed) {
+      throw new Error(`EACCES: ${action} denied by mode ${this.#formatMode(mode)}: ${normalPath}`);
+    }
+  }
+
+  #ownerForPath(normalPath) {
+    const homeOwner = normalPath.startsWith("/home/")
+      ? (normalPath.split("/").filter(Boolean)[1] ?? null)
+      : null;
+    if (homeOwner) return homeOwner;
+    return this.#currentUserId() ?? "system";
+  }
+
+  #defaultModeFor(normalPath, type) {
+    if (type === "dir") {
+      if (normalPath.startsWith("/home/")) {
+        return this.#cloneMode(ESKitFileSystem.#MODE_HOME_DIR_DEFAULT);
+      }
+      return this.#cloneMode(ESKitFileSystem.#MODE_DIR_DEFAULT);
+    }
+    return this.#cloneMode(ESKitFileSystem.#MODE_FILE_DEFAULT);
+  }
+
+  #normalizeMode(mode, normalPath, type) {
+    if (mode && typeof mode === "object" && mode.owner && mode.others) {
+      return this.#cloneMode(mode);
+    }
+    return this.#defaultModeFor(normalPath, type);
+  }
+
+  #cloneMode(mode) {
+    return {
+      owner: {
+        read: Boolean(mode?.owner?.read),
+        write: Boolean(mode?.owner?.write),
+      },
+      others: {
+        read: Boolean(mode?.others?.read),
+        write: Boolean(mode?.others?.write),
+      },
+    };
+  }
+
+  #formatMode(mode) {
+    const fmt = ({ read, write }) => `${read ? "r" : "-"}${write ? "w" : "-"}`;
+    return `owner:${fmt(mode.owner)},others:${fmt(mode.others)}`;
+  }
+
+  #currentUser() {
+    return globalThis.System?.currentUser ?? null;
+  }
+
+  #currentUserId() {
+    return this.#currentUser()?.id ?? null;
   }
 
   async #get(path) {
