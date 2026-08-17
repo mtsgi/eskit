@@ -52,7 +52,7 @@ export default class ESKitSystem {
     await this.fs.init();
     await this.users.init();
     await this.#initBaseDirs();
-    await this.#ensureBootstrapAdmin();
+    await this.#ensureDefaultAdmin();
     const user = await this.#ensureLogin();
     await this.#initCurrentUserDirs(user.id);
     this.WindowSystem = new ESKitWindowSystem();
@@ -80,27 +80,20 @@ export default class ESKitSystem {
     }
   }
 
-  async #ensureBootstrapAdmin() {
+  async #ensureDefaultAdmin() {
     if (this.users.hasUsers()) return;
-
-    const loginScreen = this.#getLoginScreen();
-    let lastError = "";
-
-    while (true) {
-      const setup = await loginScreen.requestSetup(lastError);
-      try {
-        const admin = await this.users.create({
-          id: setup.id,
-          name: setup.name,
-          password: setup.password,
-          isAdmin: true,
-        });
-        await this.users.login(admin.id, setup.password);
-        this.events.emit("user:created", { user: admin });
-        return;
-      } catch (e) {
-        lastError = e?.message ?? String(e);
-      }
+    try {
+      const admin = await this.users.create({
+        id: "admin",
+        name: "Administrator",
+        password: "",
+        isAdmin: true,
+      });
+      this.events.emit("user:created", { user: admin });
+      // 初回起動時は自動ログイン
+      await this.users.login(admin.id, "");
+    } catch (e) {
+      console.error("[ESKitSystem] Failed to create default admin user:", e);
     }
   }
 

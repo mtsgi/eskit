@@ -377,7 +377,7 @@ export default class CounterApp extends ESKitApp {
 
 **目的:** ユーザー概念を導入し、ログインセッション・ホームディレクトリ分離・所有者/モードに基づくアクセス制御を実現する。  
 **完了条件:** 管理者作成・ログイン・ユーザー切替・ユーザーごとの権限分離・`/home/{userId}` 分離が動作し、`/home/user` 依存が除去される。  
-**ステータス:** 着手中
+**ステータス:** 完了
 
 ### 決定事項
 
@@ -417,7 +417,7 @@ type User = {
 
 - ストレージ: `localStorage` (ユーザー一覧 / 現在セッション)
 - ハッシュ: PBKDF2 (SHA-256) + ランダム salt
-- 初回起動時は管理者作成フローを必須化
+- 初回起動時は管理者ユーザー（パスワードなし）を自動作成して自動ログイン
 
 ### `system/system.js` — 起動シーケンス変更
 
@@ -427,8 +427,8 @@ ESKitSystem.constructor()
        ├─ fs.init()
        ├─ users.init()
        ├─ #initBaseDirs()         /home, /shared, /system, /apps
-       ├─ #ensureBootstrapAdmin() 初回管理者作成
-       ├─ #showLoginScreen()      ログイン完了までシェルを抑止
+       ├─ #ensureDefaultAdmin()   デフォルト管理者自動作成（自動ログイン）
+       ├─ #ensureLogin()          ログイン（初回は自動ログインで通過）
        ├─ #initCurrentUserDirs()  /home/{userId}/desktop など
        ├─ new ESKitWindowSystem
        ├─ #registerBuiltinApps()

@@ -7,7 +7,6 @@ import kitstrap2Sheet from "system/kitstrap2.js";
  */
 export default class ESKitLoginScreenElement extends HTMLElement {
   #resolve = null;
-  #mode = "login";
 
   constructor() {
     super();
@@ -20,33 +19,7 @@ export default class ESKitLoginScreenElement extends HTMLElement {
     this.#bindEvents();
   }
 
-  requestSetup(errorMessage = "") {
-    this.#mode = "setup";
-    this.setAttribute("mode", "setup");
-    this.setAttribute("open", "");
-
-    this.#setSubtitle("初回セットアップ: 管理者ユーザーを作成してください");
-    this.#setSubmitLabel("管理者を作成");
-    this.#setError(errorMessage);
-
-    const idEl = this.shadowRoot.getElementById("create-user-id");
-    const nameEl = this.shadowRoot.getElementById("create-user-name");
-    const pwEl = this.shadowRoot.getElementById("password");
-    const pwcEl = this.shadowRoot.getElementById("password-confirm");
-    idEl.value = "";
-    nameEl.value = "";
-    pwEl.value = "";
-    pwcEl.value = "";
-    idEl.focus();
-
-    return new Promise((resolve) => {
-      this.#resolve = resolve;
-    });
-  }
-
   requestLogin(users, errorMessage = "") {
-    this.#mode = "login";
-    this.setAttribute("mode", "login");
     this.setAttribute("open", "");
 
     this.#setSubtitle("ログインするユーザーとパスワードを入力してください");
@@ -78,8 +51,6 @@ export default class ESKitLoginScreenElement extends HTMLElement {
 
   hide() {
     this.removeAttribute("open");
-    this.removeAttribute("mode");
-    this.#mode = "login";
   }
 
   // ─── 内部 ──────────────────────────────────────────────────────────────
@@ -90,39 +61,16 @@ export default class ESKitLoginScreenElement extends HTMLElement {
       e.preventDefault();
       if (!this.#resolve) return;
 
-      if (this.#mode === "setup") {
-        this.#onSetupSubmit();
-        return;
-      }
       this.#onLoginSubmit();
     });
-  }
-
-  #onSetupSubmit() {
-    const id = this.shadowRoot.getElementById("create-user-id").value.trim().toLowerCase();
-    const name = this.shadowRoot.getElementById("create-user-name").value.trim();
-    const password = this.shadowRoot.getElementById("password").value;
-    const passwordConfirm = this.shadowRoot.getElementById("password-confirm").value;
-
-    if (!id || !name || !password || !passwordConfirm) {
-      this.#setError("すべての項目を入力してください");
-      return;
-    }
-    if (password !== passwordConfirm) {
-      this.#setError("パスワード確認が一致しません");
-      return;
-    }
-
-    this.#setError("");
-    this.#finish({ id, name, password });
   }
 
   #onLoginSubmit() {
     const id = this.shadowRoot.getElementById("login-user-id").value;
     const password = this.shadowRoot.getElementById("password").value;
 
-    if (!id || !password) {
-      this.#setError("ユーザーとパスワードを入力してください");
+    if (!id) {
+      this.#setError("ユーザーを選択してください");
       return;
     }
 

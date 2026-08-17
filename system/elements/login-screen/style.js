@@ -72,14 +72,4 @@ export default css`
     display: flex;
     justify-content: flex-end;
   }
-
-  :host([mode="login"]) #field-create-id,
-  :host([mode="login"]) #field-create-name,
-  :host([mode="login"]) #field-password-confirm {
-    display: none;
-  }
-
-  :host([mode="setup"]) #field-login-user {
-    display: none;
-  }
 `;

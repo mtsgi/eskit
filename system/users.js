@@ -123,8 +123,9 @@ export default class ESKitUsers {
   }
 
   #validatePassword(password) {
-    if (String(password ?? "").length < PASSWORD_MIN_LEN) {
-      throw new Error(`パスワードは ${PASSWORD_MIN_LEN} 文字以上で入力してください`);
+    const len = String(password ?? "").length;
+    if (len > 0 && len < PASSWORD_MIN_LEN) {
+      throw new Error(`パスワードは空欄にするか、${PASSWORD_MIN_LEN} 文字以上で入力してください`);
     }
   }
 

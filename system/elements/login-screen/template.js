@@ -11,24 +11,9 @@ export default html`
         <select id="login-user-id"></select>
       </div>
 
-      <div class="field" id="field-create-id">
-        <label for="create-user-id">ユーザー ID</label>
-        <input id="create-user-id" type="text" inputmode="latin" placeholder="admin">
-      </div>
-
-      <div class="field" id="field-create-name">
-        <label for="create-user-name">表示名</label>
-        <input id="create-user-name" type="text" placeholder="Administrator">
-      </div>
-
       <div class="field">
         <label for="password">パスワード</label>
-        <input id="password" type="password" minlength="4">
-      </div>
-
-      <div class="field" id="field-password-confirm">
-        <label for="password-confirm">パスワード(確認)</label>
-        <input id="password-confirm" type="password" minlength="4">
+        <input id="password" type="password">
       </div>
 
       <p id="error" class="error" role="alert"></p>
