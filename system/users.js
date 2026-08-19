@@ -1,6 +1,6 @@
 const USERS_STORAGE_KEY = "eskit-users-v1";
 const SESSION_STORAGE_KEY = "eskit-session-user-v1";
-const USER_ID_PATTERN = /^[a-z][a-z0-9_-]{1,30}$/;
+const USER_ID_PATTERN = /^[a-z][a-z0-9_-]{0,30}$/;
 const PASSWORD_MIN_LEN = 4;
 const PBKDF2_ITERATIONS = 210_000;
 
@@ -49,10 +49,16 @@ export default class ESKitUsers {
     const displayName = String(name ?? "").trim() || userId;
 
     if (!USER_ID_PATTERN.test(userId)) {
-      throw new Error("ユーザー ID は英小文字で始まり、英小文字・数字・_・- のみ使用できます");
+      throw new Error("ユーザー ID は英小文字で始まり、英小文字・数字・_・- の 1〜31 文字で入力してください");
     }
     if (this.#users.some((u) => u.id === userId && !u.disabled)) {
       throw new Error(`ユーザー "${userId}" は既に存在します`);
+    }
+    if (isAdmin && this.hasUsers()) {
+      const current = this.getCurrent();
+      if (!current?.isAdmin) {
+        throw new Error("管理者ユーザーを作成できるのは管理者のみです");
+      }
     }
     this.#validatePassword(password);
 
@@ -95,6 +101,11 @@ export default class ESKitUsers {
   }
 
   async delete(userId) {
+    const current = this.getCurrent();
+    if (!current?.isAdmin) {
+      throw new Error("ユーザーを削除できるのは管理者のみです");
+    }
+
     const id = this.#normalizeUserId(userId);
     const idx = this.#users.findIndex((u) => u.id === id && !u.disabled);
     if (idx < 0) {

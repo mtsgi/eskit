@@ -114,8 +114,11 @@ export default class ESKitPermissions {
   }
 
   #storageKey(appId) {
-    const userId = window.System?.currentUser?.id ?? "anonymous";
-    return `eskit-perm-${userId}-${appId}`;
+    const user = window.System?.currentUser;
+    if (!user) {
+      throw new Error(`[ESKitPermissions] Cannot resolve storage key without an active user session`);
+    }
+    return `eskit-perm-${user.id}-${appId}`;
   }
 
   /**

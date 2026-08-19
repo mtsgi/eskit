@@ -386,6 +386,9 @@ export default class CounterApp extends ESKitApp {
 - **ロール:** 管理者 1 名 + 一般ユーザー
 - **共有領域:** `/shared` を導入し、アクセス制御対象に含める
 - **権限分離:** 同一アプリでもユーザーごとに runtime 権限を独立管理
+- **カーネル API とアプリファサードの分離:** `System.fs` 等の直接呼出しはカーネル・システム内部専用とし、アプリからは `this.fs` (FS), `this.sendMessage` (IPC), `this.listProcesses` (System Info) 等の権限検証ファサードの利用を規約化
+- **特権保護:** 管理者作成 (`isAdmin: true`) およびユーザー削除は管理者セッションを必須化
+- **ディレクトリ階層整合性:** ディレクトリの `rename` 時に配下の子孫エントリを同一トランザクションで再帰的更新
 
 ### `system/users.js` (新規)
 
@@ -418,6 +421,8 @@ type User = {
 - ストレージ: `localStorage` (ユーザー一覧 / 現在セッション)
 - ハッシュ: PBKDF2 (SHA-256) + ランダム salt
 - 初回起動時は管理者ユーザー（パスワードなし）を自動作成して自動ログイン
+- ユーザー ID: 1〜31 文字の英小文字開始文字列 (`/^[a-z][a-z0-9_-]{0,30}$/`)
+- 管理者保護: 初回以降の `isAdmin: true` 作成および `delete()` は管理者セッションを必須化
 
 ### `system/system.js` — 起動シーケンス変更
 
@@ -450,6 +455,7 @@ ESKitSystem.constructor()
 - `read/write/readdir/remove/rename` でアクセス制御を実施
   - 一般ユーザー: 自身のホーム中心
   - 管理者: システムポリシー上許可された範囲で横断アクセス可
+- ディレクトリ `rename()` は子孫エントリを再帰的にパス更新
 
 ### ログイン UI / 切替 UI
 
@@ -463,7 +469,7 @@ ESKitSystem.constructor()
 - 旧権限キーはユーザー単位キーへ移行 (`userId` を含む)
 - 破壊的変更を許容する開発方針に従い、必要時は初期化リセットを許容
 
-**関連ファイル:** `system/users.js` (新規), `system/system.js` (変更), `system/filesystem.js` (変更), `system/permissions.js` (変更), `system/elements/login-screen/` (新規), `system/elements/quick-settings/` (変更), `system/elements/drawer/` (変更), `apps/test/` (変更)
+**関連ファイル:** `system/users.js` (新規), `system/system.js` (変更), `system/filesystem.js` (変更), `system/permissions.js` (変更), `system/app.js` (変更), `system/elements/login-screen/` (新規), `system/elements/quick-settings/` (変更), `system/elements/drawer/` (変更), `apps/test/` (変更)
 
 ---
 
@@ -476,7 +482,7 @@ ESKitSystem.constructor()
 
 **設計基盤:** kitstrap2 の CSS 変数システム上に構築する。`system/main.css` で `--eskit-*` 変数を `var(--kit-*)` にブリッジ済みのため、`--kit-*` 変数を上書きするだけで Shadow DOM を含む全要素に即時反映される。
 
-**テーマファイル形式 (`system/themes/*.json`):**
+**テーマオブジェクト形式:**
 
 ```json
 {
@@ -512,7 +518,7 @@ class ESKitTheme {
 }
 ```
 
-- 組み込みテーマ: `system/themes/` 以下に JSON で同梱 (最低 `light.json` / `dark.json`)
+- 組み込みテーマ: `system/themes/light.js`, `system/themes/dark.js` という静的 JS モジュールとして定義し、ES Modules の `import` で読み込む（ブート時の fetch を抑え、キャッシュを最大活用）。
 - `localStorage` にテーマ ID とカスタム vars を永続化。起動時に自動復元
 - 適用時に `system:theme-changed` イベントを発行
 - 壁紙: `--eskit-wallpaper` CSS 変数 → `eskit-desktop` の `background` に反映
@@ -521,7 +527,7 @@ class ESKitTheme {
 
 1. URL を受け取り `theme.json` を fetch
 2. JSON スキーマバリデーション (必須: `id`, `name`, `vars`)
-3. ユーザー確認ダイアログ: テーマ名・作者・変更変数数を提示
+3. ユーザー確認ダイアログ: テーマ名・作者・変更変数数を提示（新設する汎用確認ダイアログ `eskit-dialog` を利用）
 4. `applyVars()` で即時適用 → `localStorage` に保存
 5. `ThemeMeta` を返却 (リストに追加)
 
@@ -530,29 +536,43 @@ class ESKitTheme {
 - `vars` のキーは `--kit-*` または `--eskit-*` のみ許可 (任意プロパティ注入を防止)
 - 外部テーマ読み込みには設定アプリ経由のユーザー操作を必須とする
 
+### `system/elements/dialog/` (新規)
+
+**ESKitDialogElement (`eskit-dialog`):**
+- システム全体で利用できる汎用的な確認・メッセージ用ダイアログ要素。
+- Popover API を用いて表示し、テーマのインポート確認やその他のシステム確認処理で再利用する。
+
 ### `system/i18n.js` — 多言語対応 (新規)
 
 ```js
 class ESKitI18n {
+  locale: Signal<string>                   // 現在の言語コード（Hamon シグナル）
   async load(lang: string): Promise<void>  // system/i18n/{lang}.json を fetch
   t(key: string, vars?: Record<string, string>): string  // テンプレート補間対応
-  get current(): string    // 現在の言語コード
+  get current(): string                    // 現在の言語コード
   get available(): string[]
   extend(appId: string, lang: string, dict: Record<string, string>): void  // アプリ独自辞書
 }
 ```
 - 言語パック: `system/i18n/ja.json`, `system/i18n/en.json`
 - `navigator.language` で起動時自動選択 → `localStorage` でオーバーライド可
-- `system:locale-changed` イベントで UI 自動更新
+- **リアクティブ UI 更新:** `locale` を Hamon のシグナルとして実装し、Hamon テンプレート内の `${() => System.i18n.t('key')}` のように参照することで、言語切替時に依存関係の自動追跡により UI が即座に自動更新される。
+- 言語変更の完了時には `system:locale-changed` イベントも発行する。
 
 ### `system/elements/notification/` (新規)
 
-**ESKitNotificationElement:**
-- `System.events.on("notification:show", handler)` で自動表示
-- トースト形式 (右上固定) + `@starting-style` + `transition` でスライドイン/アウト
-- クリックまたは `duration` 経過で消去
+**ESKitNotificationContainerElement (`eskit-notification-container`):**
+- 画面右上固定の通知用コンテナ要素。
+
+**ESKitNotificationElement (`eskit-notification`):**
+- `System.events.on("notification:show", handler)` で自動表示され、`eskit-notification-container` 内に順次追加される。
+- トーストが縦に積み重なる（スタックする）設計。
+- `@starting-style` + `transition` でスライドイン/アウト。
+- クリックまたは `duration` 経過で自動的にコンテナから消去される。
 
 ### `apps/settings/` — 設定アプリ (新規)
+
+**実装方針:** 新規の Hamon テンプレートエンジンを全面的に使用し、宣言的かつリアクティブに実装する。
 
 タブ構成:
 - **外観:** 組み込みテーマ選択グリッド・URL からテーマをインポート (`System.theme.load`)・壁紙グリッド (6 種)・現在のテーマを JSON でエクスポート
@@ -560,7 +580,7 @@ class ESKitI18n {
 - **システム:** 実行中プロセス数・登録アプリ数
 - **権限:** インストール済みアプリの権限一覧 + 個別取り消し UI
 
-**関連ファイル:** `system/theme.js`, `system/i18n.js`, `system/i18n/ja.json`, `system/i18n/en.json`, `system/elements/notification/`, `system/system.js`, `apps/settings/`
+**関連ファイル:** `system/theme.js`, `system/themes/light.js`, `system/themes/dark.js`, `system/i18n.js`, `system/i18n/ja.json`, `system/i18n/en.json`, `system/elements/dialog/`, `system/elements/notification/`, `system/system.js`, `apps/settings/`
 
 ---
 
@@ -573,10 +593,10 @@ class ESKitI18n {
 
 | アプリ | 機能 | 利用 API | 宣言権限 |
 |--------|------|---------|---------|
-| `apps/notepad/` | テキストエディタ、仮想 FS へ保存/読込 | `System.fs.writeFile/readFile`, `showNotification` | `fs.read`, `fs.write`, `notifications` |
+| `apps/notepad/` | テキストエディタ、仮想 FS へ保存/読込 | `this.fs.writeFile/readFile`, `this.showNotification` | `fs.read`, `fs.write`, `notifications` |
 | `apps/calculator/` | 四則演算電卓 | `this.querySelector` | (なし) |
-| `apps/clock/` | 時計 / ストップウォッチ / タイマー | `close()` で interval 解除、`showNotification` | `notifications` |
-| `apps/filemanager/` | 仮想 FS ブラウザ、ファイル作成・削除・リネーム | `System.fs.*` 全 API | `fs.read`, `fs.write` |
+| `apps/clock/` | 時計 / ストップウォッチ / タイマー | `close()` で interval 解除、`this.showNotification` | `notifications` |
+| `apps/filemanager/` | 仮想 FS ブラウザ、ファイル作成・削除・リネーム | `this.fs.*` 全 API | `fs.read`, `fs.write` |
 
 ### 外部アプリインストール — `ESKitRegistry.registerFromUrl` 実装
 

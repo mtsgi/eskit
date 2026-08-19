@@ -73,7 +73,9 @@ System.users.logout();
 
 ### ユーザー仕様
 
+- ユーザー ID は英小文字で始まる 1〜31 文字（英小文字・数字・`_`・`-`）です
 - 初回起動時は管理者ユーザー作成が必須です
+- `isAdmin: true` での作成および `delete()` による削除は管理者ユーザーのみ実行可能です（特権昇格・不正削除防止）
 - セッションは `localStorage` に保持されます
 - パスワードは PBKDF2 (SHA-256) でハッシュ化して保存されます
 - 最後の管理者ユーザーは削除できません
@@ -217,6 +219,8 @@ win.setTitle(title); // タイトルバーのテキストを更新
 ## `System.fs` — 仮想ファイルシステム
 
 IndexedDB 上に実装されたファイルシステム (`ESKitFileSystem`) です。
+
+> **Note (アプリ開発者向け):** `System.fs` はカーネル内部・シェル要素・管理者用です。一般アプリからは直接呼び出さず、2 段階権限モデルと連動する `this.fs` (ESKitApp ファサード) を使用してください。
 
 ### パス規約
 
@@ -475,6 +479,19 @@ this.setTitle(title)                  // ウィンドウタイトルを変更
 this.querySelector(selector)          // Shadow DOM 内の要素を取得
 this.querySelectorAll(selector)       // Shadow DOM 内の要素を全取得
 await this.showNotification(opts)     // 通知 (permissions: "notifications" が必要)
+await this.sendMessage(targetUuid, data) // IPC 送信 (permissions: "ipc" が必要)
+await this.listProcesses()            // プロセス一覧取得 (permissions: "system.info" が必要)
+
+// 仮想ファイルシステムファサード (マニフェストの permissions と連動)
+await this.fs.readFile(path)          // 読み取り (permissions: "fs.read" が必要)
+await this.fs.readFileAsBytes(path)   // バイナリ読み取り (permissions: "fs.read" が必要)
+await this.fs.readdir(path)           // 一覧 (permissions: "fs.read" が必要)
+await this.fs.stat(path)              // 情報取得 (permissions: "fs.read" が必要)
+await this.fs.exists(path)            // 存在確認 (permissions: "fs.read" が必要)
+await this.fs.writeFile(path, data)   // 書き込み (permissions: "fs.write" が必要)
+await this.fs.mkdir(path, opts)       // ディレクトリ作成 (permissions: "fs.write" が必要)
+await this.fs.remove(path, opts)      // 削除 (permissions: "fs.write" が必要)
+await this.fs.rename(oldPath, newPath)// リネーム/移動 (permissions: "fs.write" が必要)
 ```
 
 ### プロパティ

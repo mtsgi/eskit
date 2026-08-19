@@ -259,6 +259,29 @@ export default class ESKitFileSystem {
 
     const tx = this.#db.transaction(ESKitFileSystem.#STORE, "readwrite");
     const store = tx.objectStore(ESKitFileSystem.#STORE);
+
+    if (entry.type === "dir") {
+      const allEntries = await this.#promisify(store.getAll());
+      const descendants = allEntries.filter((e) => e.path.startsWith(from + "/"));
+      const fromPrefixLen = from.length;
+
+      for (const desc of descendants) {
+        const relative = desc.path.slice(fromPrefixLen);
+        const targetPath = to + relative;
+        const targetParent = this.#parentOf(targetPath);
+
+        await this.#promisify(store.delete(desc.path));
+        await this.#promisify(store.put({
+          ...desc,
+          path: targetPath,
+          parent: targetParent,
+          owner: desc.owner ?? this.#ownerForPath(targetPath),
+          mode: this.#normalizeMode(desc.mode, targetPath, desc.type),
+          modifiedAt: Date.now(),
+        }));
+      }
+    }
+
     await this.#promisify(store.delete(from));
     await this.#promisify(store.put({
       ...entry,
@@ -334,7 +357,9 @@ export default class ESKitFileSystem {
     if (user.isAdmin) return;
 
     // システム領域は読み取りのみ許可
-    if (normalPath.startsWith("/system") || normalPath.startsWith("/apps")) {
+    const isSystem = normalPath === "/system" || normalPath.startsWith("/system/");
+    const isApps   = normalPath === "/apps"   || normalPath.startsWith("/apps/");
+    if (isSystem || isApps) {
       if (action === "read") return;
       throw new Error(`EACCES: ${action} denied: ${normalPath}`);
     }

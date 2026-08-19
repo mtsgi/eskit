@@ -99,6 +99,16 @@ export default class SystemVerifier extends ESKitApp {
       () => this.#testFsReadBinaryAsText(),
     ]);
 
+    await this.#runSection("FileSystem — App Facade (this.fs) & ディレクトリ Rename", [
+      () => this.#testAppFsWriteRead(),
+      () => this.#testAppFsDirectoryRecursiveRename(),
+    ]);
+
+    await this.#runSection("Users & Permissions", [
+      () => this.#testUserSingleCharId(),
+      () => this.#testUserAdminProtection(),
+    ]);
+
     await this.#runSection("Registry", [
       () => this.#testRegistryList(),
       () => this.#testRegistrySearch(),
@@ -288,6 +298,121 @@ export default class SystemVerifier extends ESKitApp {
     });
   }
 
+  // ─── FileSystem — App Facade (this.fs) & ディレクトリ Rename ───────────────
+
+  async #testAppFsWriteRead() {
+    await this.#test("App FS Facade: this.fs.writeFile + readFile", async () => {
+      const data = "App FS Facade verified! ✨";
+      const file = this.#homePath(".eskit-verify-appfs.txt");
+      await this.fs.writeFile(file, data);
+      const read = await this.fs.readFile(file);
+      this.#assert(read === data, `got: ${read}`);
+      await this.fs.remove(file);
+      return "permission & facade ok";
+    });
+  }
+
+  async #testAppFsDirectoryRecursiveRename() {
+    await this.#test("FS: ディレクトリ再帰的 rename (子ファイル・子ディレクトリ)", async () => {
+      const baseDir = this.#homePath(".eskit-verify-tree");
+      const subDir  = `${baseDir}/sub`;
+      const file1   = `${baseDir}/root.txt`;
+      const file2   = `${subDir}/child.txt`;
+
+      await this.fs.mkdir(subDir, { recursive: true });
+      await this.fs.writeFile(file1, "root file");
+      await this.fs.writeFile(file2, "child file");
+
+      const newBaseDir = this.#homePath(".eskit-verify-tree-renamed");
+      await this.fs.rename(baseDir, newBaseDir);
+
+      const newFile1 = `${newBaseDir}/root.txt`;
+      const newFile2 = `${newBaseDir}/sub/child.txt`;
+
+      this.#assert(await this.fs.exists(newFile1), "renamed root file not found");
+      this.#assert(await this.fs.exists(newFile2), "renamed child file not found");
+      this.#assert((await this.fs.readFile(newFile2)) === "child file", "child content mismatch");
+
+      const entries = await this.fs.readdir(`${newBaseDir}/sub`);
+      this.#assert(entries.some((e) => e.name === "child.txt"), "child.txt not in readdir");
+
+      this.#assert(!await this.fs.exists(baseDir), "old dir still exists");
+      await this.fs.remove(newBaseDir, { recursive: true });
+      return "recursive move verified";
+    });
+  }
+
+  // ─── Users & Permissions テスト ───────────────────────────────────────────
+
+  async #testUserSingleCharId() {
+    await this.#test("Users: 1文字 ID ユーザーの作成・削除", async () => {
+      const testId = "u";
+      if (System.users.get(testId)) {
+        await System.users.delete(testId);
+      }
+
+      const user = await System.users.create({
+        id: testId,
+        name: "User U",
+        password: "password123",
+        isAdmin: false,
+      });
+      this.#assert(user.id === "u", `user.id=${user.id}`);
+      this.#assert(System.users.get("u") !== null, "user 'u' not found in get()");
+
+      await System.users.delete("u");
+      this.#assert(System.users.get("u") === null, "user 'u' still exists after delete");
+      return "1-char id allowed & deleted";
+    });
+  }
+
+  async #testUserAdminProtection() {
+    await this.#test("Users: 一般ユーザーによる管理者作成・削除の拒否", async () => {
+      const regularId = "testuser";
+      if (System.users.get(regularId)) {
+        await System.users.delete(regularId);
+      }
+      await System.users.create({
+        id: regularId,
+        name: "Regular User",
+        password: "password123",
+        isAdmin: false,
+      });
+
+      const adminUser = System.currentUser;
+      await System.users.login(regularId, "password123");
+
+      let createAdminBlocked = false;
+      try {
+        await System.users.create({
+          id: "fakeadmin",
+          name: "Fake Admin",
+          password: "password123",
+          isAdmin: true,
+        });
+      } catch {
+        createAdminBlocked = true;
+      }
+
+      let deleteBlocked = false;
+      try {
+        await System.users.delete(adminUser.id);
+      } catch {
+        deleteBlocked = true;
+      }
+
+      // 管理者に復帰 (デフォルトadminはパスワード空)
+      await System.users.login(adminUser.id, "");
+
+      // クリーンアップ
+      await System.users.delete(regularId);
+
+      this.#assert(createAdminBlocked, "Regular user was able to create an admin!");
+      this.#assert(deleteBlocked, "Regular user was able to delete a user!");
+      return "privilege escalation & unauthorized delete blocked";
+    });
+  }
+
   // ─── Registry テスト ──────────────────────────────────────────────────────
 
   async #testRegistryList() {
@@ -309,8 +434,8 @@ export default class SystemVerifier extends ESKitApp {
   // ─── System API テスト ────────────────────────────────────────────────────
 
   async #testListProcesses() {
-    await this.#test("System: listProcesses()", () => {
-      const procs = System.listProcesses();
+    await this.#test("ESKitApp: this.listProcesses() (system.info 権限)", async () => {
+      const procs = await this.listProcesses();
       this.#assert(procs.some((p) => p.uuid === this._uuid), "self not in process list");
       return `${procs.length} process(es)`;
     });
@@ -326,9 +451,9 @@ export default class SystemVerifier extends ESKitApp {
   }
 
   async #testSendMessage() {
-    await this.#test("System: sendMessage → onMessage", () => {
+    await this.#test("ESKitApp: this.sendMessage() → onMessage (ipc 権限)", async () => {
       this.#ipcReceived = false;
-      System.sendMessage(this._uuid, { ping: true });
+      await this.sendMessage(this._uuid, { ping: true });
       this.#assert(this.#ipcReceived, "onMessage not called");
       return "ping → pong";
     });
