@@ -1,0 +1,17 @@
+{
+  "id": "eskit.eskish",
+  "name": "ESKish",
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": "ESKit 標準ターミナル環境",
+  "icon": "icon.png",
+  "permissions": [
+    "fs.read",
+    "fs.write",
+    "system.info",
+    "notifications",
+    "ipc",
+    "user.info",
+    "user.manage"
+  ]
+}

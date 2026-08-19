@@ -18,7 +18,7 @@
 
 ---
 
-## 現状 (Phase 1～3.5 実装済み)
+## 現状 (Phase 1～4.5 実装済み)
 
 | ファイル | 実装内容 |
 |----------|---------|
@@ -29,7 +29,7 @@
 | `system/permissions.js` | ESKitPermissions — 2 段階権限管理 + ダイアログ |
 | `system/registry.js` | ESKitRegistry — アプリ登録・検索 |
 | `system/shell-mode.js` | ESKitShellMode — desktop/mobile モード管理 |
-| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API |
+| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API (`this.fs`, `this.sendMessage`, `this.listProcesses`) |
 | `system/system.js` | ESKitSystem — カーネル (boot, loadApp, IPC, notify) |
 | `system/window.js` | ESKitWindowSystem — モード対応ウィンドウ管理 |
 | `system/elements/desktop/` | `eskit-desktop` — デスクトップルート要素 |
@@ -39,8 +39,10 @@
 | `system/elements/drawer/` | `eskit-drawer` — モバイル用アプリドロワー |
 | `system/elements/home-bar/` | `eskit-home-bar` — モバイル用ホームバー |
 | `system/elements/permission-dialog/` | `eskit-permission-dialog` — 権限確認ダイアログ (Web Component) |
+| `system/elements/login-screen/` | `eskit-login-screen` — ログイン画面 (Phase 4) |
 | `apps/test/` | SystemVerifier — システム検証アプリ |
 | `apps/welcome/` | WelcomeApp — ようこそ画面 |
+| `apps/eskish/` | ESKish — 標準ターミナル環境 (Phase 4.5) |
 | `README.md` | 日本語 README |
 | `API.md` | API リファレンス (README から分離) |
 | `system/kitstrap2.js` | Singleton CSSStyleSheet — kitstrap2 を Shadow DOM 全体に共有 |
@@ -50,6 +52,7 @@
 | `system/elements/beacon/` | `eskit-beacon` — グローバル検索オーバーレイ (Phase 3) |
 | `system/elements/quick-settings/` | `eskit-quick-settings` — クイック設定パネル (Phase 3) |
 | `system/hamon.js` | Hamon — リアクティブテンプレートエンジン (Phase 3.5) |
+| `system/users.js` | ESKitUsers — ユーザー管理・認証 (Phase 4) |
 
 ### シェルモード (ESKitShellMode)
 
@@ -373,7 +376,7 @@ export default class CounterApp extends ESKitApp {
 
 ---
 
-## Phase 4: Multi-User Foundation — ユーザー概念導入
+## Phase 4: Multi-User Foundation — ユーザー概念導入 ✅
 
 **目的:** ユーザー概念を導入し、ログインセッション・ホームディレクトリ分離・所有者/モードに基づくアクセス制御を実現する。  
 **完了条件:** 管理者作成・ログイン・ユーザー切替・ユーザーごとの権限分離・`/home/{userId}` 分離が動作し、`/home/user` 依存が除去される。  
@@ -470,6 +473,33 @@ ESKitSystem.constructor()
 - 破壊的変更を許容する開発方針に従い、必要時は初期化リセットを許容
 
 **関連ファイル:** `system/users.js` (新規), `system/system.js` (変更), `system/filesystem.js` (変更), `system/permissions.js` (変更), `system/app.js` (変更), `system/elements/login-screen/` (新規), `system/elements/quick-settings/` (変更), `system/elements/drawer/` (変更), `apps/test/` (変更)
+
+---
+
+## Phase 4.5: ESKish — ターミナルアプリ ✅
+
+**目的:** ESKit のマルチユーザー・権限モデル・ファイルシステム・プロセス管理をコマンドラインから操作・検証できる標準ターミナルアプリ「ESKish」を導入する。  
+**完了条件:** ターミナルウィンドウからファイル操作・プロセス管理・ユーザー確認・JS式評価を実行でき、コマンド履歴・カレントディレクトリ表示が動作する。  
+**ステータス:** 完了
+
+> 詳細は [API.md](API.md#eskish--ターミナルアプリ) を参照
+
+### 設計方針・決定事項
+
+- **実行モデル:** Unix 風シェル体系に特化しつつ、コマンド名は **EcmaScript / ESKit API 風の独自命名** (`readFile`, `writeFile`, `readDir`, `makeDir`, `remove`, `rename`, `changeDir`, `listProcesses`, `loadApp`, `closeApp`, `currentUser`, `eval` 等) を採用
+- **JavaScript 実行:** `eval <code...>` コマンドに限定し、現在ログイン中のユーザー権限（`this`, `this.fs`, `System`）で実行
+- **CWD (作業ディレクトリ):** 初期値は `/home/{userId}`。相対パスおよび `~` (ホーム展開) をサポート
+- **プロンプト形式:** `{userId}@eskit:{path}$ ` (ホーム配下は `~` で短縮表示)
+- **UI 構造:** プレーンテキスト主体の軽量ターミナル (テキストログ、`↑`/`↓` コマンド履歴、自動スクロール)
+- **組み込み登録:** `system/system.js` の `#registerBuiltinApps()` に `"apps/eskish/"` として常備
+
+### `apps/eskish/` (新規)
+
+- `define.json`: マニフェスト (要求権限: `fs.read`, `fs.write`, `system.info`, `notifications`, `ipc`, `user.info`, `user.manage`)
+- `main.js`: `ESKishApp` クラス (CWD 管理、パス解決、コマンドパーサー、履歴管理)
+- `style.js`: ターミナル UI スタイル (ダークモノスペーステーマ)
+
+**関連ファイル:** `apps/eskish/define.json` (新規), `apps/eskish/main.js` (新規), `apps/eskish/style.js` (新規), `system/system.js` (変更)
 
 ---
 
@@ -697,6 +727,7 @@ system/
 apps/
   test/
   welcome/
+  eskish/               (Phase 4.5)
   settings/             (Phase 5)
   notepad/              (Phase 6)
   calculator/           (Phase 6)
