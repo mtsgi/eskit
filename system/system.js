@@ -4,6 +4,12 @@ import ESKitFileSystem  from "./filesystem.js";
 import ESKitRegistry    from "./registry.js";
 import ESKitPermissions from "./permissions.js";
 import ESKitShellMode   from "./shell-mode.js";
+import ESKitUsers       from "./users.js";
+import ESKitLoginScreenElement from "./elements/login-screen/main.js";
+
+if (!customElements.get("eskit-login-screen")) {
+  customElements.define("eskit-login-screen", ESKitLoginScreenElement);
+}
 
 /**
  * ESKitSystem — OS カーネル相当のシステムクラス
@@ -16,12 +22,14 @@ export default class ESKitSystem {
   #process      = new Map(); // uuid → ESKitApp
   #zIndex       = 100;
   #readyPromise;
+  #loginScreen  = null;
 
   events      = new ESKitEventBus();
   fs          = new ESKitFileSystem();
   registry    = new ESKitRegistry();
   permissions = new ESKitPermissions();
   shellMode   = new ESKitShellMode();
+  users       = new ESKitUsers();
 
   constructor() {
     window.System      = this;
@@ -33,22 +41,91 @@ export default class ESKitSystem {
     return this.#readyPromise;
   }
 
+  /** 現在ログイン中のユーザー */
+  get currentUser() {
+    return this.users.getCurrent();
+  }
+
   // ─── 起動シーケンス ─────────────────────────────────────────────────────
 
   async #boot() {
     await this.fs.init();
-    await this.#initDefaultDirs();
+    await this.users.init();
+    await this.#initBaseDirs();
+    await this.#ensureDefaultAdmin();
+    const user = await this.#ensureLogin();
+    await this.#initCurrentUserDirs(user.id);
     this.WindowSystem = new ESKitWindowSystem();
     await this.#registerBuiltinApps();
     this.initUI();
-    this.events.emit("system:ready");
+    this.events.emit("system:ready", { user });
   }
 
-  async #initDefaultDirs() {
-    const dirs = ["/home", "/home/user", "/home/user/desktop", "/system", "/apps"];
+  async #initBaseDirs() {
+    const dirs = ["/home", "/shared", "/system", "/apps"];
     for (const dir of dirs) {
       await this.fs.mkdir(dir, { recursive: true });
     }
+  }
+
+  async #initCurrentUserDirs(userId) {
+    const dirs = [
+      `/home/${userId}`,
+      `/home/${userId}/desktop`,
+      `/home/${userId}/documents`,
+      `/home/${userId}/.config`,
+    ];
+    for (const dir of dirs) {
+      await this.fs.mkdir(dir, { recursive: true });
+    }
+  }
+
+  async #ensureDefaultAdmin() {
+    if (this.users.hasUsers()) return;
+    try {
+      const admin = await this.users.create({
+        id: "admin",
+        name: "Administrator",
+        password: "",
+        isAdmin: true,
+      });
+      this.events.emit("user:created", { user: admin });
+      // 初回起動時は自動ログイン
+      await this.users.login(admin.id, "");
+    } catch (e) {
+      console.error("[ESKitSystem] Failed to create default admin user:", e);
+    }
+  }
+
+  async #ensureLogin() {
+    const current = this.currentUser;
+    if (current) {
+      this.#getLoginScreen().hide();
+      this.events.emit("user:logged-in", { user: current });
+      return current;
+    }
+
+    const loginScreen = this.#getLoginScreen();
+    let lastError = "";
+
+    while (true) {
+      const creds = await loginScreen.requestLogin(this.users.list(), lastError);
+      try {
+        const user = await this.users.login(creds.id, creds.password);
+        loginScreen.hide();
+        this.events.emit("user:logged-in", { user });
+        return user;
+      } catch (e) {
+        lastError = e?.message ?? String(e);
+      }
+    }
+  }
+
+  #getLoginScreen() {
+    if (this.#loginScreen) return this.#loginScreen;
+    this.#loginScreen = document.createElement("eskit-login-screen");
+    document.body.appendChild(this.#loginScreen);
+    return this.#loginScreen;
   }
 
   async #registerBuiltinApps() {
@@ -126,6 +203,10 @@ export default class ESKitSystem {
   async loadApp(appDir) {
     await this.#readyPromise;
 
+    if (!this.currentUser) {
+      throw new Error("[ESKitSystem] Cannot load app without an active user session");
+    }
+
     const dir = appDir.endsWith("/") ? appDir : appDir + "/";
 
     let manifest = this.registry.getByDir(dir);
@@ -198,6 +279,22 @@ export default class ESKitSystem {
       name:  app.name,
       state: app._state,
     }));
+  }
+
+  /** 現在ユーザーのホームディレクトリを返す */
+  homeDir(userId = this.currentUser?.id) {
+    return userId ? `/home/${userId}` : null;
+  }
+
+  /** ログアウトしてログイン画面へ戻る */
+  logout() {
+    for (const uuid of [...this.#process.keys()]) {
+      this.closeApp(uuid);
+    }
+    const previous = this.currentUser;
+    this.users.logout();
+    this.events.emit("user:logged-out", { user: previous });
+    location.reload();
   }
 
   // ─── ユーティリティ ────────────────────────────────────────────────────────

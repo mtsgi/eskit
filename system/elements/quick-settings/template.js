@@ -7,6 +7,18 @@ export default html`
 
     <div class="qs-section">
       <div class="qs-row">
+        <span class="qs-label">ユーザー</span>
+        <span class="qs-value kit-font-s" id="current-user">(未ログイン)</span>
+      </div>
+      <div class="qs-row">
+        <button class="kit-button -small" id="logout-btn">ログアウト</button>
+      </div>
+    </div>
+
+    <hr class="qs-divider">
+
+    <div class="qs-section">
+      <div class="qs-row">
         <span class="qs-label">シェルモード</span>
         <div class="kit-buttongroup" id="mode-group">
           <button class="kit-button -small mode-btn" data-mode="auto">Auto</button>
@@ -21,11 +33,11 @@ export default html`
     <div class="qs-section">
       <div class="qs-row">
         <span class="qs-label">テーマ</span>
-        <span class="qs-value kit-c-fg-secondary kit-font-s">Phase 4</span>
+        <span class="qs-value kit-c-fg-secondary kit-font-s">Phase 5</span>
       </div>
       <div class="qs-row">
         <span class="qs-label">言語</span>
-        <span class="qs-value kit-c-fg-secondary kit-font-s">Phase 4</span>
+        <span class="qs-value kit-c-fg-secondary kit-font-s">Phase 5</span>
       </div>
     </div>
 

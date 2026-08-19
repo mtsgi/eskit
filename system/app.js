@@ -102,6 +102,46 @@ export default class ESKitApp {
   }
 
   /**
+   * 別のアプリへ IPC メッセージを送信する。権限 "ipc" が必要。
+   * @param {string} targetUuid  送信先アプリの UUID
+   * @param {*} data
+   */
+  async sendMessage(targetUuid, data) {
+    const system = window.System;
+    if (!system) return;
+    if (!await system.permissions.check(this._uuid, "ipc")) {
+      throw new Error(`[ESKitApp:${this.name}] Permission "ipc" denied`);
+    }
+    system.sendMessage(targetUuid, data);
+  }
+
+  /**
+   * 実行中のプロセス一覧を取得する。権限 "system.info" が必要。
+   * @returns {Promise<{uuid: string, name: string, state: string}[]>}
+   */
+  async listProcesses() {
+    const system = window.System;
+    if (!system) return [];
+    if (!await system.permissions.check(this._uuid, "system.info")) {
+      throw new Error(`[ESKitApp:${this.name}] Permission "system.info" denied`);
+    }
+    return system.listProcesses();
+  }
+
+  #fs = null;
+
+  /**
+   * 権限検証付き仮想ファイルシステムファサードを取得する。
+   * @returns {ESKitAppFS}
+   */
+  get fs() {
+    if (!this.#fs) {
+      this.#fs = new ESKitAppFS(this);
+    }
+    return this.#fs;
+  }
+
+  /**
    * Hamon スコープを取得する。初回アクセス時に遅延生成される。
    * @returns {import('./hamon.js').HamonScope}
    */
@@ -112,6 +152,73 @@ export default class ESKitApp {
       this._hamonScope = new (globalThis.__HamonScope ?? _FallbackScope)();
     }
     return this._hamonScope;
+  }
+}
+
+/**
+ * アプリ用仮想ファイルシステムファサード
+ * System.permissions.check() を通じて権限確認を行う。
+ */
+class ESKitAppFS {
+  #app;
+
+  constructor(app) {
+    this.#app = app;
+  }
+
+  async #assert(permission) {
+    const system = window.System;
+    if (!system) throw new Error("System is not available");
+    const granted = await system.permissions.check(this.#app._uuid, permission);
+    if (!granted) {
+      throw new Error(`[ESKitApp:${this.#app.name}] Permission "${permission}" denied`);
+    }
+    return system.fs;
+  }
+
+  async readFile(path) {
+    const fs = await this.#assert("fs.read");
+    return fs.readFile(path);
+  }
+
+  async readFileAsBytes(path) {
+    const fs = await this.#assert("fs.read");
+    return fs.readFileAsBytes(path);
+  }
+
+  async readdir(path) {
+    const fs = await this.#assert("fs.read");
+    return fs.readdir(path);
+  }
+
+  async stat(path) {
+    const fs = await this.#assert("fs.read");
+    return fs.stat(path);
+  }
+
+  async exists(path) {
+    const fs = await this.#assert("fs.read");
+    return fs.exists(path);
+  }
+
+  async writeFile(path, content) {
+    const fs = await this.#assert("fs.write");
+    return fs.writeFile(path, content);
+  }
+
+  async mkdir(path, opts) {
+    const fs = await this.#assert("fs.write");
+    return fs.mkdir(path, opts);
+  }
+
+  async remove(path, opts) {
+    const fs = await this.#assert("fs.write");
+    return fs.remove(path, opts);
+  }
+
+  async rename(oldPath, newPath) {
+    const fs = await this.#assert("fs.write");
+    return fs.rename(oldPath, newPath);
   }
 }
 
