@@ -120,5 +120,12 @@ export default css`
     font-size: var(--kit-font-size-s);
     font-variant-numeric: tabular-nums;
     color: var(--eskit-color-text);
+    cursor: pointer;
+    padding: var(--kit-space-xs) var(--kit-space-s);
+    border-radius: var(--kit-radius-s);
+  }
+
+  .clock:hover {
+    background: color-mix(in srgb, var(--eskit-color-text) 12%, transparent);
   }
 `;

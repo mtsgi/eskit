@@ -34,6 +34,8 @@ export default class ESKitShellMode {
   get current()   { return this.#current; }
   get isDesktop() { return this.#current === ShellMode.DESKTOP; }
   get isMobile()  { return this.#current === ShellMode.MOBILE; }
+  /** MediaQuery の自動検出がロックされているかどうか */
+  get isLocked()  { return this.#locked; }
 
   /**
    * モードを明示的に設定する。

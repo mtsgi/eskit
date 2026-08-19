@@ -24,6 +24,16 @@ export default class ESKitDrawerElement extends HTMLElement {
   connectedCallback() {
     this.#render();
     this.#adoptStyle();
+    // クイック設定ボタン
+    this.shadowRoot.getElementById("qs-btn").addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.quickSettings?.toggle();
+    });
+    // スポットライト検索ボタン
+    this.shadowRoot.getElementById("beacon-btn").addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.beacon?.show();
+    });
     // オーバーレイ背景クリックで閉じる
     this.addEventListener("click", e => {
       if (e.target === this) this.close();
@@ -36,15 +46,26 @@ export default class ESKitDrawerElement extends HTMLElement {
 
   /** ドロワーを開く (内容をリフレッシュしてから表示) */
   open() {
+    // 閉じるアニメーション中に再度開く場合はキャンセル
+    this.classList.remove("is-closing");
     this.#refresh();
+    this.#updateTime();
     this.setAttribute("open", "");
     window.System?.events.emit("drawer:open");
   }
 
-  /** ドロワーを閉じる */
+  /** ドロワーを閉じる (退場アニメーション後に非表示) */
   close() {
-    this.removeAttribute("open");
-    window.System?.events.emit("drawer:close");
+    if (!this.isOpen || this.classList.contains("is-closing")) return;
+    this.classList.add("is-closing");
+    const panel = this.shadowRoot.querySelector(".drawer-panel");
+    const done = () => {
+      this.removeAttribute("open");
+      this.classList.remove("is-closing");
+      window.System?.events.emit("drawer:close");
+      panel?.removeEventListener("animationend", done);
+    };
+    panel?.addEventListener("animationend", done, { once: true });
   }
 
   /** ドロワーの開閉をトグルする */
@@ -60,6 +81,14 @@ export default class ESKitDrawerElement extends HTMLElement {
     if (!sys) return;
     this.#renderRunning(sys.listProcesses());
     this.#renderAllApps(sys.registry.list());
+  }
+
+  /** トップバーの時刻表示を更新する */
+  #updateTime() {
+    const el = this.shadowRoot.getElementById("drawer-time");
+    if (!el) return;
+    const now = new Date();
+    el.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   }
 
   #renderRunning(processes) {
