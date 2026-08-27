@@ -34,7 +34,7 @@ export default css`
   /* ─── ランチャーボタン ──────────────────────────────────────── */
 
   .launcher-btn {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 2.5rem;
@@ -88,8 +88,13 @@ export default css`
     white-space: nowrap;
     max-width: 12rem;
     overflow: hidden;
-    text-overflow: ellipsis;
     flex-shrink: 0;
+  }
+
+  .app-btn-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .app-btn:hover {

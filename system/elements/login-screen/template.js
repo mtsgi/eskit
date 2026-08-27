@@ -7,12 +7,18 @@ export default html`
 
     <form id="form" class="form" autocomplete="off" novalidate>
       <div class="field" id="field-login-user">
-        <label for="login-user-id">ユーザー</label>
+        <label for="login-user-id" class="kit-flex kit-items-center kit-gap-xs">
+          <eskit-icon set="lucide" name="user" size="14"></eskit-icon>
+          ユーザー
+        </label>
         <select id="login-user-id"></select>
       </div>
 
       <div class="field">
-        <label for="password">パスワード</label>
+        <label for="password" class="kit-flex kit-items-center kit-gap-xs">
+          <eskit-icon set="lucide" name="lock" size="14"></eskit-icon>
+          パスワード
+        </label>
         <input id="password" type="password">
       </div>
 

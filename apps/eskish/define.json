@@ -4,7 +4,11 @@
   "entry": "main.js",
   "version": "1.0.0",
   "description": "ESKit 標準ターミナル環境",
-  "icon": "icon.png",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "terminal"
+  },
   "permissions": [
     "fs.read",
     "fs.write",

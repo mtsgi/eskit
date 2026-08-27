@@ -91,10 +91,19 @@ export default class ESKitLauncherElement extends HTMLElement {
     for (const manifest of manifests) {
       const btn = document.createElement("button");
       btn.className = "app-card";
-      btn.innerHTML = `
-        <span class="app-icon">🪄</span>
-        <span class="app-name">${this.#esc(manifest.name)}</span>
-      `;
+
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "app-icon";
+      const iconEl = window.System?.icons?.createAppIcon(manifest.icon, { size: 32 });
+      if (iconEl) iconSpan.appendChild(iconEl);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "app-name";
+      nameSpan.textContent = manifest.name;
+
+      btn.appendChild(iconSpan);
+      btn.appendChild(nameSpan);
+
       btn.addEventListener("click", async () => {
         if (manifest._dir) {
           await window.System?.loadApp(manifest._dir);

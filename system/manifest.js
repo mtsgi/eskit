@@ -56,11 +56,38 @@ export default class ESKitManifest {
       console.warn(`[ESKitManifest] Unknown permissions in ${appDir}: ${unknownPerms.join(", ")}`);
     }
 
+    let normalizedIcon = null;
+    if (obj.icon !== undefined && obj.icon !== null) {
+      if (typeof obj.icon !== "object" || Array.isArray(obj.icon)) {
+        throw new Error(`[ESKitManifest] "icon" must be an object ({ type: "set" | "image", ... }) in ${appDir}`);
+      }
+      if (obj.icon.type === "set") {
+        if (!obj.icon.name || typeof obj.icon.name !== "string") {
+          throw new Error(`[ESKitManifest] icon of type "set" requires a "name" string in ${appDir}`);
+        }
+        normalizedIcon = {
+          type: "set",
+          set: typeof obj.icon.set === "string" ? obj.icon.set : "lucide",
+          name: obj.icon.name,
+        };
+      } else if (obj.icon.type === "image") {
+        if (!obj.icon.src || typeof obj.icon.src !== "string") {
+          throw new Error(`[ESKitManifest] icon of type "image" requires a "src" string in ${appDir}`);
+        }
+        normalizedIcon = {
+          type: "image",
+          src: obj.icon.src,
+        };
+      } else {
+        throw new Error(`[ESKitManifest] Invalid icon type "${obj.icon.type}" (expected "set" or "image") in ${appDir}`);
+      }
+    }
+
     return {
       id:          String(obj.id),
       name:        String(obj.name),
       entry:       String(obj.entry),
-      icon:        obj.icon  ? String(obj.icon)  : null,
+      icon:        normalizedIcon,
       version:     obj.version     ? String(obj.version)     : "0.0.1",
       description: obj.description ? String(obj.description) : "",
       permissions,

@@ -123,7 +123,8 @@ export default class ESKitWindowSystem {
 
     const shadowRoot = appElement.shadowRoot;
 
-    // タイトル
+    // アプリアイコン & タイトル
+    appElement.setIcon(appInstance.manifest?.icon);
     shadowRoot.querySelector(".app-title").textContent = appInstance.name;
 
     // 閉じるボタン

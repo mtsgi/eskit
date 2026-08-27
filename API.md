@@ -18,7 +18,7 @@ const System = globalThis.System;
 await System.loadApp("apps/myapp/");         // アプリを起動 → UUID を返す
 System.closeApp(uuid);                        // アプリを終了
 System.getApp(uuid);                          // アプリインスタンスを取得
-System.listProcesses();                       // [{uuid, name, state}, ...]
+System.listProcesses();                       // [{uuid, name, icon, state}, ...]
 System.notify({ title, message, duration });  // notification:show イベントを発行
 System.sendMessage(targetUuid, data);         // アプリ間 IPC
 System.setShellMode("desktop" | "mobile" | "auto"); // シェルモード切替 ("auto" で自動検出復帰)
@@ -36,6 +36,7 @@ System.registry     // ESKitRegistry
 System.permissions  // ESKitPermissions
 System.users        // ESKitUsers
 System.shellMode    // ESKitShellMode
+System.icons        // ESKitIcons
 System.WindowSystem // ESKitWindowSystem (ブート後)
 ```
 
@@ -102,6 +103,61 @@ System.shellMode.unlock();      // 自動検出を再開し、ビューポート
 |--------|------|
 | `"desktop"` | 複数ウィンドウのカード形式。タスクバー・ランチャーが表示される |
 | `"mobile"` | 1 画面 1 アプリの全画面形式。ホームバー・ドロワーが表示される |
+
+---
+
+## `System.icons` — アイコンレジストリ & `<eskit-icon>`
+
+アイコンセット（Icon Set）を管理し、SVG アイコンを描画する `ESKitIcons` インスタンスおよび Web Component です。
+
+```js
+// アイコンの存在確認と SVG 内部コンテンツ取得
+System.icons.has("lucide", "search");  // true
+System.icons.get("lucide", "search");  // '<circle cx="11" cy="11" r="8"/>...'
+
+// アイコンセット一覧とアイコン一覧
+System.icons.listSets();               // ["lucide"]
+System.icons.listIcons("lucide");      // ["minus", "square", "search", ...]
+
+// 独自アイコンセットの登録 (アプリ・プラグイン拡張)
+System.icons.registerSet("my-icons", {
+  "custom-star": '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+});
+
+// マニフェスト icon 定義から DOM 要素を生成
+const appIcon = System.icons.createAppIcon(manifest.icon, { size: 24 });
+```
+
+### `<eskit-icon>` Web Component
+
+```html
+<eskit-icon set="lucide" name="search" size="18"></eskit-icon>
+<eskit-icon set="lucide" name="x" size="14" stroke-width="2.5" color="#ef4444"></eskit-icon>
+```
+
+| 属性 | 型 | デフォルト | 説明 |
+|------|----|-----------|------|
+| `set` | string | `"lucide"` | アイコンセット名 |
+| `name` | string | (必須) | アイコン名 |
+| `size` | string/number | `1em` | サイズ（数値の場合は `px` 単位） |
+| `stroke-width` | string/number | `2` | 線の太さ |
+| `color` | string | `currentColor` | アイコン色 |
+
+### `icon(set, name, options)` ヘルパー関数
+
+Hamon テンプレートや動的 DOM 構築で利用できるヘルパー関数です。`<eskit-icon>` DOM 要素を返します。
+
+```js
+import { icon } from "system/icons.js";
+
+// Hamon テンプレート内
+const template = hamon`
+  <button class="kit-button">
+    ${icon("lucide", "sparkles", { size: 16 })}
+    <span>クリック</span>
+  </button>
+`;
+```
 
 ---
 
@@ -499,8 +555,9 @@ await this.fs.rename(oldPath, newPath)// リネーム/移動 (permissions: "fs.w
 | プロパティ | 説明 |
 |----------|------|
 | `this.name` | アプリ表示名 (コンストラクタクラス名、または `setTitle()` で変更) |
+| `this.manifest` | 読み取り専用・イミュータブルな `Manifest` オブジェクト |
 | `this._uuid` | アプリ固有の UUID |
-| `this._manifest` | `define.json` から読み込まれた Manifest |
+| `this._manifest` | `define.json` から読み込まれた Manifest (内部用) |
 | `this._state` | `"running"`, `"minimized"`, `"maximized"`, `"closed"` |
 | `this._windowElement` | 対応する `<eskit-window>` 要素 |
 
@@ -569,7 +626,11 @@ await System.registry.registerFromUrl("https://example.com/myapp/");
   "entry":       "main.js",
   "version":     "1.0.0",
   "description": "アプリの説明",
-  "icon":        "icon.png",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "sparkles"
+  },
   "permissions": ["fs.read", "notifications"]
 }
 ```
@@ -581,7 +642,7 @@ await System.registry.registerFromUrl("https://example.com/myapp/");
 | `entry` | ✅ | エントリポイント JS ファイル名 |
 | `version` | — | バージョン文字列 (省略時 `"0.0.1"`) |
 | `description` | — | アプリの説明 |
-| `icon` | — | アイコン画像のファイル名 |
+| `icon` | — | アイコンオブジェクト (`{ type: "set", set?: "lucide", name }` または `{ type: "image", src }`) |
 | `permissions` | — | 要求権限の配列 |
 
 ---

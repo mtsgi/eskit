@@ -92,7 +92,18 @@ export default class ESKitContextMenuElement extends HTMLElement {
       const btn = document.createElement("button");
       btn.className = "menu-item";
       if (item.icon) {
-        btn.innerHTML = `<span class="menu-item-icon">${this.#esc(item.icon)}</span>${this.#esc(item.label)}`;
+        let iconHtml = "";
+        if (typeof item.icon === "object" && item.icon.name) {
+          const set = item.icon.set || "lucide";
+          iconHtml = `<eskit-icon set="${this.#esc(set)}" name="${this.#esc(item.icon.name)}" size="16"></eskit-icon>`;
+        } else if (typeof item.icon === "string") {
+          if (window.System?.icons?.has("lucide", item.icon)) {
+            iconHtml = `<eskit-icon set="lucide" name="${this.#esc(item.icon)}" size="16"></eskit-icon>`;
+          } else {
+            iconHtml = this.#esc(item.icon);
+          }
+        }
+        btn.innerHTML = `<span class="menu-item-icon">${iconHtml}</span><span>${this.#esc(item.label)}</span>`;
       } else {
         btn.textContent = item.label;
       }

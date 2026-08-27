@@ -48,6 +48,9 @@ export default css`
 
   .beacon-icon {
     font-size: var(--kit-font-size-l);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     line-height: 1;
   }

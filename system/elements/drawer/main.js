@@ -101,13 +101,22 @@ export default class ESKitDrawerElement extends HTMLElement {
       return;
     }
 
-    for (const { uuid, name } of processes) {
+    for (const { uuid, name, icon } of processes) {
       const btn = document.createElement("button");
       btn.className = "app-card";
-      btn.innerHTML = `
-        <span class="app-icon">🪄</span>
-        <span class="app-name">${this.#esc(name)}</span>
-      `;
+
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "app-icon";
+      const iconEl = window.System?.icons?.createAppIcon(icon, { size: 32 });
+      if (iconEl) iconSpan.appendChild(iconEl);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "app-name";
+      nameSpan.textContent = name;
+
+      btn.appendChild(iconSpan);
+      btn.appendChild(nameSpan);
+
       btn.addEventListener("click", () => {
         window.System?.WindowSystem?.activateWindow(uuid);
         this.close();
@@ -124,10 +133,19 @@ export default class ESKitDrawerElement extends HTMLElement {
     for (const manifest of manifests) {
       const btn = document.createElement("button");
       btn.className = "app-card grid-card";
-      btn.innerHTML = `
-        <span class="app-icon">🪄</span>
-        <span class="app-name">${this.#esc(manifest.name)}</span>
-      `;
+
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "app-icon";
+      const iconEl = window.System?.icons?.createAppIcon(manifest.icon, { size: 32 });
+      if (iconEl) iconSpan.appendChild(iconEl);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "app-name";
+      nameSpan.textContent = manifest.name;
+
+      btn.appendChild(iconSpan);
+      btn.appendChild(nameSpan);
+
       btn.addEventListener("click", async () => {
         // manifest._dir は registry.list() が付与する
         if (manifest._dir) {
