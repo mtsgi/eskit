@@ -85,7 +85,9 @@ export default class ESKitLoginScreenElement extends HTMLElement {
 
   #setSubmitLabel(text) {
     const el = this.shadowRoot.getElementById("submit");
-    if (el) el.textContent = text;
+    if (el) {
+      el.innerHTML = `<span class="kit-flex kit-items-center kit-gap-xs"><span>${text}</span><eskit-icon set="lucide" name="arrow-right" size="14"></eskit-icon></span>`;
+    }
   }
 
   #setError(message) {

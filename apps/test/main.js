@@ -29,8 +29,14 @@ export default class SystemVerifier extends ESKitApp {
     this.template = hamon`
       <div class="runner">
         <div class="toolbar">
-          <button @click=${() => this.#runAll()} class="kit-button -primary -small">▶ Run All Tests</button>
-          <button @click=${() => this.#testNotify()} class="kit-button -small">🔔 Test Notification</button>
+          <button @click=${() => this.#runAll()} class="kit-button -primary -small kit-flex kit-items-center kit-gap-xs">
+            <eskit-icon set="lucide" name="sparkles" size="14"></eskit-icon>
+            Run All Tests
+          </button>
+          <button @click=${() => this.#testNotify()} class="kit-button -small kit-flex kit-items-center kit-gap-xs">
+            <eskit-icon set="lucide" name="bell" size="14"></eskit-icon>
+            Test Notification
+          </button>
           <span :class=${() => `summary ${this.#summaryClass.value}`}>${() => this.#summaryText.value}</span>
         </div>
         <ol id="results" class="results">
@@ -48,7 +54,12 @@ export default class SystemVerifier extends ESKitApp {
                   const { pass } = item.state.value;
                   return `result ${pass === null ? "run" : pass ? "pass" : "fail"}`;
                 }}>
-                  <span class="icon">${() => { const { pass } = item.state.value; return pass === null ? "⏳" : pass ? "✅" : "❌"; }}</span>
+                  <span class="icon">${() => {
+                    const { pass } = item.state.value;
+                    if (pass === null) return hamon`<eskit-icon set="lucide" name="clock" size="14"></eskit-icon>`;
+                    if (pass) return hamon`<eskit-icon set="lucide" name="check-circle-2" size="14" color="var(--kit-color-success, #22c55e)"></eskit-icon>`;
+                    return hamon`<eskit-icon set="lucide" name="x-circle" size="14" color="var(--kit-color-danger, #ef4444)"></eskit-icon>`;
+                  }}</span>
                   <span class="name">${item.name}</span>
                   <span class="detail">${() => item.state.value.detail ?? ""}</span>
                 </li>
@@ -124,6 +135,14 @@ export default class SystemVerifier extends ESKitApp {
       () => this.#testSetTitle(),
       () => this.#testQuerySelector(),
       () => this.#testQuerySelectorAll(),
+    ]);
+
+    await this.#runSection("Icon System (ESKitIcons & <eskit-icon>)", [
+      () => this.#testIconRegistryGetHas(),
+      () => this.#testIconRegistryRegisterSet(),
+      () => this.#testIconElementRender(),
+      () => this.#testIconElementFallback(),
+      () => this.#testCreateAppIcon(),
     ]);
 
     this.#updateSummary();
@@ -482,6 +501,98 @@ export default class SystemVerifier extends ESKitApp {
       const buttons = this.querySelectorAll("button");
       this.#assert(buttons.length >= 2, `length=${buttons.length}`);
       return `${buttons.length} buttons`;
+    });
+  }
+
+  // ─── Icon System テスト ───────────────────────────────────────────────────
+
+  async #testIconRegistryGetHas() {
+    await this.#test("Icons: System.icons.get() & has()", () => {
+      this.#assert(System.icons !== undefined, "System.icons is undefined");
+      this.#assert(System.icons.has("lucide"), "lucide set not found");
+      this.#assert(System.icons.has("lucide", "search"), "lucide:search not found");
+      this.#assert(!System.icons.has("lucide", "non_existent_icon_xyz"), "non-existent icon found");
+
+      const svgContent = System.icons.get("lucide", "search");
+      this.#assert(typeof svgContent === "string" && svgContent.length > 0, "svgContent is invalid");
+      return "OK";
+    });
+  }
+
+  async #testIconRegistryRegisterSet() {
+    await this.#test("Icons: System.icons.registerSet() & listSets()", () => {
+      System.icons.registerSet("test-custom-set", {
+        "custom-star": '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+      });
+      this.#assert(System.icons.has("test-custom-set", "custom-star"), "custom icon not registered");
+      this.#assert(System.icons.listSets().includes("test-custom-set"), "test-custom-set not in listSets");
+      this.#assert(System.icons.listIcons("test-custom-set").includes("custom-star"), "custom-star not in listIcons");
+      return "OK";
+    });
+  }
+
+  async #testIconElementRender() {
+    await this.#test("Icons: <eskit-icon> DOM レンダリング & 属性反映", () => {
+      const el = document.createElement("eskit-icon");
+      el.setAttribute("set", "lucide");
+      el.setAttribute("name", "terminal");
+      el.setAttribute("size", "24");
+      el.setAttribute("color", "#ff0000");
+
+      const container = document.createElement("div");
+      container.appendChild(el);
+      document.body.appendChild(container);
+
+      try {
+        const svg = el.shadowRoot?.querySelector("svg");
+        this.#assert(svg !== null, "SVG element not rendered in shadowRoot");
+        this.#assert(el.style.width === "24px", `width=${el.style.width}`);
+        this.#assert(el.style.color === "rgb(255, 0, 0)", `color=${el.style.color}`);
+      } finally {
+        container.remove();
+      }
+      return "OK";
+    });
+  }
+
+  async #testIconElementFallback() {
+    await this.#test("Icons: 未登録アイコン指定時のフォールバック (help-circle)", () => {
+      const el = document.createElement("eskit-icon");
+      el.setAttribute("set", "lucide");
+      el.setAttribute("name", "unknown_missing_icon");
+
+      const container = document.createElement("div");
+      container.appendChild(el);
+      document.body.appendChild(container);
+
+      try {
+        const svg = el.shadowRoot?.querySelector("svg");
+        this.#assert(svg !== null, "SVG element not rendered");
+        this.#assert(svg.innerHTML.length > 0, "SVG innerHTML is empty on fallback");
+      } finally {
+        container.remove();
+      }
+      return "OK";
+    });
+  }
+
+  async #testCreateAppIcon() {
+    await this.#test("Icons: System.icons.createAppIcon() (set & image)", () => {
+      // 1. set 指定
+      const setIcon = System.icons.createAppIcon({ type: "set", set: "lucide", name: "terminal" }, { size: 20 });
+      this.#assert(setIcon.tagName.toLowerCase() === "eskit-icon", "setIcon is not <eskit-icon>");
+      this.#assert(setIcon.getAttribute("name") === "terminal", "setIcon name != terminal");
+
+      // 2. image 指定
+      const imgIcon = System.icons.createAppIcon({ type: "image", src: "icon.png" }, { size: 20 });
+      this.#assert(imgIcon.tagName.toLowerCase() === "img", "imgIcon is not <img>");
+      this.#assert(imgIcon.getAttribute("src") === "icon.png", "imgIcon src != icon.png");
+
+      // 3. null フォールバック
+      const nullIcon = System.icons.createAppIcon(null, { size: 20 });
+      this.#assert(nullIcon.tagName.toLowerCase() === "eskit-icon", "nullIcon is not <eskit-icon>");
+      this.#assert(nullIcon.getAttribute("name") === "package", "nullIcon name != package");
+      return "OK";
     });
   }
 

@@ -503,6 +503,73 @@ ESKitSystem.constructor()
 
 ---
 
+## Phase 4.8: Icon System — アイコンセットと Lucide Icons 統合
+
+**目的:** 絵文字や記号文字に依存していたシステム UI（ウィンドウ操作、コンテキストメニュー、Beacon、タスクバー、ランチャー、ドロワー、クイック設定、ログイン画面等）およびアプリのアイコン表示を刷新し、**アイコンセット (Icon Set)** の概念に基づいた一貫性のある Lucide Icons 基盤を導入する。  
+**完了条件:** `<eskit-icon set="..." name="...">` Web Component および `icon(set, name, options)` ヘルパーが動作し、`System.icons` レジストリによりセット単位でアイコンが管理・描画され、`define.json` マニフェストの `icon` オブジェクト指定が解釈・表示される。  
+**ステータス:** 完了
+
+### 設計方針・決定事項
+
+- **アイコンセット (Icon Set) モデル:** アイコンは単一の `name` ではなく、**`set` (アイコンセット名) と `name` (アイコン名)** の 2 つのキーで常に明示的に解決する（`<eskit-icon set="lucide" name="search">`）。
+- **ビルド不要・完全ローカル自己完結:** 外部 CDN や npm ビルドに一切依存せず、`system/icons.js` に標準の `"lucide"` アイコンセットの SVG 定義を同期マップとして保持する。
+- **Web Component `<eskit-icon>`:**
+  - 属性: `set`, `name`, `size`, `stroke-width`, `color`
+  - スタイル: `display: inline-flex`, `vertical-align: middle`, `color: currentColor`, デフォルトサイズ `1em`。CSS 変数 `--eskit-icon-size`, `--eskit-icon-stroke-width` によるオーバーライドに対応。
+- **ヘルパー関数 `icon(set, name, options)`:**
+  - Hamon テンプレートや動的 DOM 生成向けに、`<eskit-icon>` 要素または SVG ノードを返す関数を提供。
+- **マニフェスト (`define.json`) 形式:**
+  - `icon` フィールドはオブジェクト形式 `{ type: "set" | "image", ... }` で統一:
+    - アイコンセット: `{ "type": "set", "set": "lucide", "name": "terminal" }`
+    - 画像ファイル: `{ "type": "image", "src": "icon.png" }`
+
+### `system/icons.js` — アイコンレジストリ (新規)
+
+**ESKitIcons:**
+```js
+class ESKitIcons {
+  registerSet(setId: string, icons: Record<string, string>): void
+  get(setId: string, name: string): string | null
+  has(setId: string, name?: string): boolean
+  listSets(): string[]
+  listIcons(setId: string): string[]
+}
+```
+
+- **組み込みセット (`lucide`):**
+  - OS 起動時に `system/icons.js` 内の主要 Lucide アイコン（約50〜100種: ウィンドウ制御、検索、設定、ファイル、ターミナル、電源、ユーザー、テーマ、各種状態表示等）を `"lucide"` セットとして同期登録。
+- **アプリによる拡張:**
+  - アプリやプラグインは `System.icons.registerSet("my-app-set", { icon1: "<svg...>...", ... })` により独自のアイコンセットを登録可能。
+
+### `system/elements/icon/` (新規)
+
+**ESKitIconElement (`eskit-icon`):**
+```html
+<eskit-icon set="lucide" name="search" size="18"></eskit-icon>
+```
+- Shadow DOM 内で SVG を描画。`currentColor` に追従。
+- `observedAttributes`: `["set", "name", "size", "stroke-width", "color"]`
+- `set` または `name` 変更時に `System.icons.get(set, name)` を再取得して描画。存在しない場合はフォールバック表示。
+
+### 既存 UI / アプリの Lucide アイコン置換スコープ
+
+| コンポーネント | 対象箇所 | 置換前 | 置換後 (`set="lucide"`) |
+|--------------|---------|-------|------------------------|
+| `eskit-window` | タイトルバー操作ボタン | `–`, `□`, `✕` | `minus`, `square` / `maximize-2`, `x` |
+| `eskit-context-menu` | デフォルトメニュー項目 | `💠`, `🔍`, `🔄` | `monitor-smartphone`, `search`, `refresh-cw` |
+| `eskit-beacon` | 検索バー・結果フォールバック | `🔍`, `🪄` | `search`, `sparkles` |
+| `eskit-launcher` | ランチャーボタン・アプリアイコン | `🪄` | マニフェストの `icon` または `sparkles` |
+| `eskit-drawer` | ドロワーアプリアイコン | `🪄` | マニフェストの `icon` または `sparkles` |
+| `eskit-quick-settings` | モード、テーマ、システム項目 | 文字/記号 | `monitor-smartphone`, `sun`, `moon`, `cpu`, `hard-drive` |
+| `eskit-login-screen` | 入力欄・ボタン | 文字 | `user`, `lock`, `arrow-right` |
+| `apps/eskish/` | マニフェスト `icon` | `"icon.png"` | `{ "type": "set", "set": "lucide", "name": "terminal" }` |
+| `apps/welcome/` | マニフェスト `icon` | `"icon.png"` | `{ "type": "set", "set": "lucide", "name": "sparkles" }` |
+| `apps/test/` | 検証状態アイコン | `⏳`, `✅`, `❌` | `clock`, `check-circle-2`, `x-circle` |
+
+**関連ファイル:** `system/icons.js` (新規), `system/elements/icon/main.js` (新規), `system/elements/icon/style.js` (新規), `system/manifest.js` (変更), `system/window.js` (変更), `system/system.js` (変更), 各種既存要素・アプリ (変更)
+
+---
+
 ## Phase 5: System Services — システムサービス
 
 **目的:** テーマシステム、通知、i18n、設定アプリの基盤サービスを実装する。  
@@ -703,6 +770,7 @@ system/
   kitstrap2.css         (実装済み)
   hamon.js              (Phase 3.5)
   users.js              (Phase 4)
+  icons.js              (Phase 4.8)
   theme.js              (Phase 5)
   themes/               (Phase 5)
     light.json
@@ -723,6 +791,7 @@ system/
     beacon/             (Phase 3)
     quick-settings/     (Phase 3)
     login-screen/       (Phase 4)
+    icon/               (Phase 4.8)
     notification/       (Phase 5)
 apps/
   test/

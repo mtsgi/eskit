@@ -50,7 +50,9 @@ export default css`
 
   .menu-item-icon {
     width: 1.2em;
-    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
 

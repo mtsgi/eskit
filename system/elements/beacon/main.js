@@ -78,13 +78,21 @@ export default class ESKitBeaconElement extends HTMLElement {
       const manifest = this.#currentResults[i];
       const btn = document.createElement("button");
       btn.className = `result-item${i === this.#selectedIndex ? " -selected" : ""}`;
-      btn.innerHTML = `
-        <span class="result-icon">🪄</span>
-        <span class="result-info">
-          <span class="result-name">${this.#esc(manifest.name)}</span>
-          <span class="result-desc">${this.#esc(manifest.description || manifest.id)}</span>
-        </span>
+
+      const iconSpan = document.createElement("span");
+      iconSpan.className = "result-icon";
+      const iconEl = window.System?.icons?.createAppIcon(manifest.icon, { size: 18 });
+      if (iconEl) iconSpan.appendChild(iconEl);
+
+      const infoSpan = document.createElement("span");
+      infoSpan.className = "result-info";
+      infoSpan.innerHTML = `
+        <span class="result-name">${this.#esc(manifest.name)}</span>
+        <span class="result-desc">${this.#esc(manifest.description || manifest.id)}</span>
       `;
+
+      btn.appendChild(iconSpan);
+      btn.appendChild(infoSpan);
       btn.addEventListener("click", () => this.#launch(manifest));
       this.#resultsEl.appendChild(btn);
     }
