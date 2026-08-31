@@ -1,24 +1,21 @@
-import style    from "./style.js";
-import template from "./template.js";
+import style from "./style.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
  * ESKitLauncherElement — デスクトップモード用ランチャー
- *
- * レジストリに登録されたアプリをグリッド形式で表示し、検索・起動できる。
- * タスクバーのランチャーボタンまたは `launcher:toggle` イベントで開閉する。
- * モバイルモードでは非表示 (ESKitDrawerElement が代替)。
- *
- * 属性:
- *   open — ランチャーが開いているかどうか (boolean attribute)
- *   mode — "desktop" | "mobile"  (ESKitWindowSystem が設定)
  */
 export default class ESKitLauncherElement extends HTMLElement {
   #offToggle = null;
+  #offLocale = null;
+  #scope = null;
+  #searchQuery = "";
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   connectedCallback() {
@@ -29,19 +26,19 @@ export default class ESKitLauncherElement extends HTMLElement {
 
   disconnectedCallback() {
     this.#offToggle?.();
+    this.#offLocale?.();
+    this.#scope?.dispose();
   }
 
   get isOpen() {
     return this.hasAttribute("open");
   }
 
-  /** ランチャーを開く (内容をリフレッシュしてから表示) */
   show() {
-    // 閉じるアニメーション中に再度開く場合はキャンセル
     this.classList.remove("is-closing");
+    this.#searchQuery = "";
     this.#refresh();
     this.setAttribute("open", "");
-    // 検索ボックスにフォーカス
     const input = this.shadowRoot.getElementById("launcher-search");
     if (input) {
       input.value = "";
@@ -49,7 +46,6 @@ export default class ESKitLauncherElement extends HTMLElement {
     }
   }
 
-  /** ランチャーを閉じる (退場アニメーション後に非表示) */
   hide() {
     if (!this.isOpen || this.classList.contains("is-closing")) return;
     this.classList.add("is-closing");
@@ -62,14 +58,14 @@ export default class ESKitLauncherElement extends HTMLElement {
     panel?.addEventListener("animationend", done, { once: true });
   }
 
-  /** ランチャーの開閉をトグルする */
   toggle() {
     this.isOpen ? this.hide() : this.show();
   }
 
   // ─── 内容の更新 ────────────────────────────────────────────────────────────
 
-  #refresh(query = "") {
+  #refresh(query = this.#searchQuery) {
+    this.#searchQuery = query;
     const sys = window.System;
     if (!sys) return;
     const manifests = query
@@ -84,7 +80,8 @@ export default class ESKitLauncherElement extends HTMLElement {
     grid.innerHTML = "";
 
     if (manifests.length === 0) {
-      grid.innerHTML = `<p class="empty-message">アプリが見つかりません</p>`;
+      const emptyText = window.System?.i18n?.t("system.noResults") || "アプリが見つかりません";
+      grid.innerHTML = `<p class="empty-message">${this.#esc(emptyText)}</p>`;
       return;
     }
 
@@ -99,7 +96,7 @@ export default class ESKitLauncherElement extends HTMLElement {
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "app-name";
-      nameSpan.textContent = manifest.name;
+      nameSpan.textContent = window.System?.i18n?.getAppName(manifest) || manifest.name;
 
       btn.appendChild(iconSpan);
       btn.appendChild(nameSpan);
@@ -117,7 +114,8 @@ export default class ESKitLauncherElement extends HTMLElement {
   // ─── レンダリング ─────────────────────────────────────────────────────────
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {
@@ -127,24 +125,23 @@ export default class ESKitLauncherElement extends HTMLElement {
   }
 
   #bindEvents() {
-    // オーバーレイ背景クリックで閉じる
     this.addEventListener("click", e => {
       if (e.target === this) this.hide();
     });
 
-    // 検索入力
     this.shadowRoot.getElementById("launcher-search")?.addEventListener("input", e => {
       this.#refresh(e.target.value.trim());
     });
 
-    // launcher:toggle イベント購読
     const sys = window.System;
     if (sys) {
       this.#offToggle = sys.events.on("launcher:toggle", () => this.toggle());
+      this.#offLocale = sys.events.on("system:locale-changed", () => {
+        this.#refresh();
+      });
     }
   }
 
-  /** XSS 対策: テキストをエスケープして innerHTML に安全に挿入する */
   #esc(str) {
     return String(str)
       .replace(/&/g, "&amp;")

@@ -1,43 +1,30 @@
 import style from "./style.js";
-import template from "./template.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
  * ESKitDrawerElement — アプリドロワー
- *
- * モバイルモード時に表示されるアプリ一覧オーバーレイ。
- * 実行中アプリへの切り替えと、未起動アプリの起動が可能。
- *
- * 属性:
- *   open — ドロワーが開いているかどうか (boolean attribute)
- *
- * イベント (System.events):
- *   drawer:open  — ドロワーが開かれた
- *   drawer:close — ドロワーが閉じられた
  */
 export default class ESKitDrawerElement extends HTMLElement {
+  #scope = null;
+  #offLocale = null;
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   connectedCallback() {
     this.#render();
     this.#adoptStyle();
-    // クイック設定ボタン
-    this.shadowRoot.getElementById("qs-btn").addEventListener("click", () => {
-      this.close();
-      window.System?.WindowSystem?.quickSettings?.toggle();
-    });
-    // スポットライト検索ボタン
-    this.shadowRoot.getElementById("beacon-btn").addEventListener("click", () => {
-      this.close();
-      window.System?.WindowSystem?.beacon?.show();
-    });
-    // オーバーレイ背景クリックで閉じる
-    this.addEventListener("click", e => {
-      if (e.target === this) this.close();
-    });
+    this.#bindEvents();
+  }
+
+  disconnectedCallback() {
+    this.#offLocale?.();
+    this.#scope?.dispose();
   }
 
   get isOpen() {
@@ -46,7 +33,6 @@ export default class ESKitDrawerElement extends HTMLElement {
 
   /** ドロワーを開く (内容をリフレッシュしてから表示) */
   open() {
-    // 閉じるアニメーション中に再度開く場合はキャンセル
     this.classList.remove("is-closing");
     this.#refresh();
     this.#updateTime();
@@ -75,7 +61,6 @@ export default class ESKitDrawerElement extends HTMLElement {
 
   // ─── 内容の更新 ────────────────────────────────────────────────────────────
 
-  /** 開くたびに実行中アプリ・全アプリ一覧を再描画する */
   #refresh() {
     const sys = window.System;
     if (!sys) return;
@@ -83,12 +68,10 @@ export default class ESKitDrawerElement extends HTMLElement {
     this.#renderAllApps(sys.registry.list());
   }
 
-  /** トップバーの時刻表示を更新する */
   #updateTime() {
     const el = this.shadowRoot.getElementById("drawer-time");
     if (!el) return;
-    const now = new Date();
-    el.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    el.textContent = window.System?.i18n?.formatTime(new Date()) || new Date().toLocaleTimeString();
   }
 
   #renderRunning(processes) {
@@ -97,11 +80,12 @@ export default class ESKitDrawerElement extends HTMLElement {
     list.innerHTML = "";
 
     if (processes.length === 0) {
-      list.innerHTML = `<p class="empty-message">実行中のアプリはありません</p>`;
+      const emptyText = window.System?.i18n?.t("settings.permissionsTab.noApps") || "実行中のアプリはありません";
+      list.innerHTML = `<p class="empty-message">${this.#esc(emptyText)}</p>`;
       return;
     }
 
-    for (const { uuid, name, icon } of processes) {
+    for (const { uuid, name, icon, _manifest } of processes) {
       const btn = document.createElement("button");
       btn.className = "app-card";
 
@@ -112,7 +96,7 @@ export default class ESKitDrawerElement extends HTMLElement {
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "app-name";
-      nameSpan.textContent = name;
+      nameSpan.textContent = _manifest ? window.System?.i18n?.getAppName(_manifest) : name;
 
       btn.appendChild(iconSpan);
       btn.appendChild(nameSpan);
@@ -141,13 +125,12 @@ export default class ESKitDrawerElement extends HTMLElement {
 
       const nameSpan = document.createElement("span");
       nameSpan.className = "app-name";
-      nameSpan.textContent = manifest.name;
+      nameSpan.textContent = window.System?.i18n?.getAppName(manifest) || manifest.name;
 
       btn.appendChild(iconSpan);
       btn.appendChild(nameSpan);
 
       btn.addEventListener("click", async () => {
-        // manifest._dir は registry.list() が付与する
         if (manifest._dir) {
           await window.System?.loadApp(manifest._dir);
         }
@@ -160,7 +143,8 @@ export default class ESKitDrawerElement extends HTMLElement {
   // ─── レンダリング ─────────────────────────────────────────────────────────
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {
@@ -169,7 +153,27 @@ export default class ESKitDrawerElement extends HTMLElement {
     this.shadowRoot.adoptedStyleSheets = [kitstrap2Sheet, sheet];
   }
 
-  /** XSS 対策: テキストをエスケープして innerHTML に安全に挿入する */
+  #bindEvents() {
+    this.shadowRoot.getElementById("qs-btn")?.addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.quickSettings?.toggle();
+    });
+
+    this.shadowRoot.getElementById("beacon-btn")?.addEventListener("click", () => {
+      this.close();
+      window.System?.WindowSystem?.beacon?.show();
+    });
+
+    this.addEventListener("click", e => {
+      if (e.target === this) this.close();
+    });
+
+    this.#offLocale = window.System?.events?.on("system:locale-changed", () => {
+      this.#updateTime();
+      this.#refresh();
+    });
+  }
+
   #esc(str) {
     return String(str)
       .replace(/&/g, "&amp;")

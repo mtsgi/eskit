@@ -100,8 +100,45 @@ export default class ESKitApp {
   }
 
   /**
+   * 翻訳テキストを取得する (i18n)
+   * @param {string} key
+   * @param {Record<string, string|number>} [vars]
+   * @returns {string}
+   */
+  t(key, vars) {
+    return window.System?.i18n?.t(key, vars) ?? key;
+  }
+
+  /**
+   * ダイアログ (確認) を表示する
+   * @param {Parameters<typeof window.System.dialog.confirm>[0]} opts
+   * @returns {Promise<boolean>}
+   */
+  async confirm(opts) {
+    return window.System?.dialog?.confirm(opts) ?? false;
+  }
+
+  /**
+   * ダイアログ (アラート) を表示する
+   * @param {Parameters<typeof window.System.dialog.alert>[0]} opts
+   * @returns {Promise<void>}
+   */
+  async alert(opts) {
+    return window.System?.dialog?.alert(opts);
+  }
+
+  /**
+   * ダイアログ (入力) を表示する
+   * @param {Parameters<typeof window.System.dialog.prompt>[0]} opts
+   * @returns {Promise<string|null>}
+   */
+  async prompt(opts) {
+    return window.System?.dialog?.prompt(opts) ?? null;
+  }
+
+  /**
    * 通知を表示する。権限 "notifications" が必要。
-   * @param {{ title?: string, message?: string, duration?: number }} opts
+   * @param {{ title?: string, message?: string, type?: string, duration?: number, icon?: string, action?: { label: string, onClick?: () => void } }} opts
    */
   async showNotification(opts) {
     const system = window.System;

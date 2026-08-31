@@ -65,6 +65,14 @@ export default class ESKitFileSystem {
     };
 
     this.#db = await this.#promisify(req);
+
+    // システム基底ディレクトリの初期作成（権限チェック不要のVFSレベル初期化）
+    for (const dir of ["/home", "/shared", "/system", "/apps"]) {
+      if (!await this.exists(dir)) {
+        await this.#mkdirOne(dir);
+      }
+    }
+
     return this;
   }
 
@@ -139,9 +147,8 @@ export default class ESKitFileSystem {
    */
   async mkdir(path, { recursive = false } = {}) {
     const normalPath = this.#normalize(path);
-    await this.#assertAccess(normalPath, "write");
-
     if (normalPath === "/") return;
+    if (await this.exists(normalPath)) return;
 
     if (recursive) {
       const parts = normalPath.split("/").filter(Boolean);
@@ -149,11 +156,12 @@ export default class ESKitFileSystem {
       for (const part of parts) {
         current += "/" + part;
         if (!await this.exists(current)) {
+          await this.#assertAccess(current, "write");
           await this.#mkdirOne(current);
         }
       }
     } else {
-      if (await this.exists(normalPath)) return;
+      await this.#assertAccess(normalPath, "write");
       await this.#mkdirOne(normalPath);
     }
   }

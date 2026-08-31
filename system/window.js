@@ -371,7 +371,7 @@ export default class ESKitWindowSystem {
 
     const title = document.createElement("div");
     title.className = "eskit-snap-assist-title";
-    title.textContent = "割り当てるアプリを選択";
+    title.textContent = this.system?.i18n?.t("system.snapAssistTitle") || "割り当てるアプリを選択";
     panel.appendChild(title);
 
     const grid = document.createElement("div");
@@ -381,7 +381,8 @@ export default class ESKitWindowSystem {
       const app = this.system.getApp(uuid);
       const btn = document.createElement("button");
       btn.className = "eskit-snap-assist-item";
-      btn.textContent = app?.name ?? uuid;
+      const appName = app ? (this.system?.i18n?.getAppName(app._manifest) || app.name) : uuid;
+      btn.textContent = appName;
       btn.addEventListener("click", () => {
         const oppositeSide = snappedSide === "left" ? "right" : "left";
         win.snap(oppositeSide);

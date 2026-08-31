@@ -43,7 +43,7 @@ export default class ESKishApp extends ESKitApp {
     this.template = hamon`
       <div class="terminal" @click=${() => this.#focusInput()}>
         <div class="output" id="output">
-          <div class="line info"><span class="text">ESKish Terminal v1.0.0 — Type "help" for a list of commands.</span></div>
+          <div class="line info"><span class="text">${() => this.t("terminal.banner")}</span></div>
           ${list(
             () => this.#lines.value,
             (item) => hamon`<div class="line ${() => item.type}">${() => item.prompt ? hamon`<span class="prompt">${item.prompt}</span>` : ""}<span class="text">${() => item.text}</span></div>`,
@@ -72,7 +72,10 @@ export default class ESKishApp extends ESKitApp {
    * アプリウィンドウ表示後の初期化処理。タイトルを設定し入力欄にフォーカスを当てる。
    */
   initialize() {
-    this.setTitle("ESKish");
+    this.setTitle(this.t("apps.eskish.name"));
+    this.hamon.effect(() => {
+      this.setTitle(this.t("apps.eskish.name"));
+    });
     this.#focusInput();
   }
 
@@ -471,42 +474,42 @@ export default class ESKishApp extends ESKitApp {
       case "help":
       case "?": {
         return [
-          "ESKish Available Commands:",
+          this.t("terminal.helpTitle"),
           "  File Operations:",
-          "    readFile (cat) <path>            - Read and display file content",
-          "    writeFile (write) <path> <text>  - Write text to file",
-          "    readDir (ls, dir) [path]         - List directory entries",
-          "    makeDir (mkdir) <path>           - Create directory",
-          "    remove (rm) <path>               - Delete file or directory",
-          "    rename (mv) <from> <to>          - Move / rename file or dir",
-          "    stat <path>                      - Show entry metadata",
+          `    readFile (cat) <path>            - ${this.t("terminal.helpDesc.readFile")}`,
+          `    writeFile (write) <path> <text>  - ${this.t("terminal.helpDesc.writeFile")}`,
+          `    readDir (ls, dir) [path]         - ${this.t("terminal.helpDesc.readDir")}`,
+          `    makeDir (mkdir) <path>           - ${this.t("terminal.helpDesc.makeDir")}`,
+          `    remove (rm) <path>               - ${this.t("terminal.helpDesc.remove")}`,
+          `    rename (mv) <from> <to>          - ${this.t("terminal.helpDesc.rename")}`,
+          `    stat <path>                      - ${this.t("terminal.helpDesc.stat")}`,
           "  Navigation:",
-          "    changeDir (cd) [path]            - Change current directory (~, .. supported)",
-          "    currentDir (pwd)                 - Print current directory",
+          `    changeDir (cd) [path]            - ${this.t("terminal.helpDesc.changeDir")}`,
+          `    currentDir (pwd)                 - ${this.t("terminal.helpDesc.currentDir")}`,
           "  Processes & Apps:",
-          "    listProcesses (ps)               - List running processes",
-          "    listApps (apps)                  - List all registered applications",
-          "    loadApp (open) <dir|id>          - Launch an app",
-          "    closeApp (kill) <uuid>           - Terminate an app",
-          "    focusApp (focus) <uuid>          - Bring app window to focus",
-          "    sendMessage (send) <uuid> <msg>  - Send IPC message to process",
+          `    listProcesses (ps)               - ${this.t("terminal.helpDesc.listProcesses")}`,
+          `    listApps (apps)                  - ${this.t("terminal.helpDesc.listApps")}`,
+          `    loadApp (open) <dir|id>          - ${this.t("terminal.helpDesc.loadApp")}`,
+          `    closeApp (kill) <uuid>           - ${this.t("terminal.helpDesc.closeApp")}`,
+          `    focusApp (focus) <uuid>          - ${this.t("terminal.helpDesc.focusApp")}`,
+          `    sendMessage (send) <uuid> <msg>  - ${this.t("terminal.helpDesc.sendMessage")}`,
           "  User & Session:",
-          "    currentUser (whoami)             - Show current user info",
-          "    listUsers (users)                - List registered users",
-          "    logout                           - Log out current session",
+          `    currentUser (whoami)             - ${this.t("terminal.helpDesc.currentUser")}`,
+          `    listUsers (users)                - ${this.t("terminal.helpDesc.listUsers")}`,
+          `    logout                           - ${this.t("terminal.helpDesc.logout")}`,
           "  System & Utilities:",
-          "    systemInfo (sysinfo)             - Display system overview and status",
-          "    setShellMode (mode) [mode]       - Get or set shell mode (desktop/mobile/auto)",
-          "    history                          - Display command history",
-          "    notify <title> [message]         - Trigger system notification",
-          "    eval (js) <code...>              - Execute JavaScript expression",
-          "    clear (cls)                      - Clear terminal output",
-          "    help (?)                         - Display this help message",
+          `    systemInfo (sysinfo)             - ${this.t("terminal.helpDesc.systemInfo")}`,
+          `    setShellMode (mode) [mode]       - ${this.t("terminal.helpDesc.setShellMode")}`,
+          `    history                          - ${this.t("terminal.helpDesc.history")}`,
+          `    notify <title> [message]         - ${this.t("terminal.helpDesc.notify")}`,
+          `    eval (js) <code...>              - ${this.t("terminal.helpDesc.eval")}`,
+          `    clear (cls)                      - ${this.t("terminal.helpDesc.clear")}`,
+          `    help (?)                         - ${this.t("terminal.helpDesc.help")}`,
         ].join("\n");
       }
 
       default:
-        throw new Error(`Unknown command: "${cmd}". Type "help" for available commands.`);
+        throw new Error(this.t("terminal.cmdNotFound", { cmd }));
     }
   }
 

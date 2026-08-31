@@ -49,15 +49,18 @@ export default class ESKitUsers {
     const displayName = String(name ?? "").trim() || userId;
 
     if (!USER_ID_PATTERN.test(userId)) {
-      throw new Error("ユーザー ID は英小文字で始まり、英小文字・数字・_・- の 1〜31 文字で入力してください");
+      const msg = window.System?.i18n?.t("login.errInvalidUserId") || "ユーザー ID は英小文字で始まり、英小文字・数字・_・- の 1〜31 文字で入力してください";
+      throw new Error(msg);
     }
     if (this.#users.some((u) => u.id === userId && !u.disabled)) {
-      throw new Error(`ユーザー "${userId}" は既に存在します`);
+      const msg = window.System?.i18n?.t("login.errUserExists", { userId }) || `ユーザー "${userId}" は既に存在します`;
+      throw new Error(msg);
     }
     if (isAdmin && this.hasUsers()) {
       const current = this.getCurrent();
       if (!current?.isAdmin) {
-        throw new Error("管理者ユーザーを作成できるのは管理者のみです");
+        const msg = window.System?.i18n?.t("login.errAdminOnly") || "管理者ユーザーを作成できるのは管理者のみです";
+        throw new Error(msg);
       }
     }
     this.#validatePassword(password);
@@ -82,12 +85,14 @@ export default class ESKitUsers {
     const userId = this.#normalizeUserId(id);
     const user = this.#users.find((u) => u.id === userId && !u.disabled);
     if (!user) {
-      throw new Error("ユーザーが存在しません");
+      const msg = window.System?.i18n?.t("login.errUserNotFound") || "ユーザーが存在しません";
+      throw new Error(msg);
     }
 
     const ok = await this.#verifyPassword(String(password), user.salt, user.passwordHash);
     if (!ok) {
-      throw new Error("パスワードが正しくありません");
+      const msg = window.System?.i18n?.t("login.errInvalidPass") || "パスワードが正しくありません";
+      throw new Error(msg);
     }
 
     this.#currentUserId = user.id;
@@ -103,20 +108,23 @@ export default class ESKitUsers {
   async delete(userId) {
     const current = this.getCurrent();
     if (!current?.isAdmin) {
-      throw new Error("ユーザーを削除できるのは管理者のみです");
+      const msg = window.System?.i18n?.t("login.errDeleteAdminOnly") || "ユーザーを削除できるのは管理者のみです";
+      throw new Error(msg);
     }
 
     const id = this.#normalizeUserId(userId);
     const idx = this.#users.findIndex((u) => u.id === id && !u.disabled);
     if (idx < 0) {
-      throw new Error("削除対象のユーザーが見つかりません");
+      const msg = window.System?.i18n?.t("login.errUserNotFound") || "削除対象のユーザーが見つかりません";
+      throw new Error(msg);
     }
 
     const target = this.#users[idx];
     if (target.isAdmin) {
       const activeAdmins = this.#users.filter((u) => !u.disabled && u.isAdmin);
       if (activeAdmins.length <= 1) {
-        throw new Error("最後の管理者ユーザーは削除できません");
+        const msg = window.System?.i18n?.t("login.errLastAdmin") || "最後の管理者ユーザーは削除できません";
+        throw new Error(msg);
       }
     }
 
@@ -136,7 +144,8 @@ export default class ESKitUsers {
   #validatePassword(password) {
     const len = String(password ?? "").length;
     if (len > 0 && len < PASSWORD_MIN_LEN) {
-      throw new Error(`パスワードは空欄にするか、${PASSWORD_MIN_LEN} 文字以上で入力してください`);
+      const msg = window.System?.i18n?.t("login.errPasswordTooShort", { minLen: PASSWORD_MIN_LEN }) || `パスワードは空欄にするか、${PASSWORD_MIN_LEN} 文字以上で入力してください`;
+      throw new Error(msg);
     }
   }
 
