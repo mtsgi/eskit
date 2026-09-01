@@ -310,8 +310,15 @@ export default class ESKishApp extends ESKitApp {
       case "changeDir":
       case "cd": {
         const target = this.#resolvePath(args[0] || "~");
-        const exists = await this.fs.exists(target);
-        if (!exists) throw new Error(`Directory not found: ${target}`);
+        let stat;
+        try {
+          stat = await this.fs.stat(target);
+        } catch {
+          throw new Error(`Directory not found: ${target}`);
+        }
+        if (stat.type !== "dir") {
+          throw new Error(`Not a directory: ${target}`);
+        }
         this.#cwd = target;
         return "";
       }
@@ -343,9 +350,17 @@ export default class ESKishApp extends ESKitApp {
       case "loadApp":
       case "open": {
         if (!args[0]) throw new Error("Usage: loadApp <appDir|appId>");
-        let appDir = args[0];
-        if (!appDir.endsWith("/") && !appDir.includes(".")) {
-          appDir = `apps/${appDir}/`;
+        const target = args[0];
+        const registered = System.registry.list().find((a) => a.id === target);
+        let appDir = registered?._dir;
+
+        if (!appDir) {
+          appDir = target;
+          if (!appDir.endsWith("/") && !appDir.startsWith("apps/")) {
+            appDir = `apps/${appDir}/`;
+          } else if (!appDir.endsWith("/")) {
+            appDir = `${appDir}/`;
+          }
         }
         const uuid = await System.loadApp(appDir);
         return `Loaded app "${appDir}" (UUID: ${uuid.slice(0, 8)})`;
@@ -353,10 +368,10 @@ export default class ESKishApp extends ESKitApp {
 
       case "closeApp":
       case "kill": {
-        if (!args[0]) throw new Error("Usage: closeApp <uuid>");
-        const uuid = args[0];
-        System.closeApp(uuid);
-        return `Closed app ${uuid}`;
+        if (!args[0]) throw new Error("Usage: closeApp <uuid|prefix>");
+        const targetUuid = await this.#resolveProcessUuid(args[0]);
+        System.closeApp(targetUuid);
+        return `Closed app ${targetUuid.slice(0, 8)}`;
       }
 
       case "focusApp":
@@ -386,6 +401,9 @@ export default class ESKishApp extends ESKitApp {
       // ─── ユーザー ──────────────────────────────────────────────────────────
       case "currentUser":
       case "whoami": {
+        if (!await System.permissions.check(this._uuid, "user.info")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "user.info" denied`);
+        }
         const user = System.currentUser;
         if (!user) return "No active user session";
         return `${user.name} (${user.id}) ${user.isAdmin ? "[admin]" : "[user]"}`;
@@ -393,6 +411,9 @@ export default class ESKishApp extends ESKitApp {
 
       case "listUsers":
       case "users": {
+        if (!await System.permissions.check(this._uuid, "user.info")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "user.info" denied`);
+        }
         const list = System.users.list();
         return ["ID            NAME              ROLE", "─".repeat(40)]
           .concat(list.map((u) => `${u.id.padEnd(12)}  ${u.name.padEnd(16)}  ${u.isAdmin ? "admin" : "user"}`))
@@ -446,9 +467,12 @@ export default class ESKishApp extends ESKitApp {
       }
 
       case "notify": {
+        if (!await System.permissions.check(this._uuid, "notifications")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "notifications" denied`);
+        }
         const title = args[0] || "ESKish";
         const message = args.slice(1).join(" ") || "Notification from ESKish";
-        await this.showNotification({ title, message });
+        System.notify({ title, message });
         return "Notification sent";
       }
 
@@ -490,8 +514,8 @@ export default class ESKishApp extends ESKitApp {
           `    listProcesses (ps)               - ${this.t("terminal.helpDesc.listProcesses")}`,
           `    listApps (apps)                  - ${this.t("terminal.helpDesc.listApps")}`,
           `    loadApp (open) <dir|id>          - ${this.t("terminal.helpDesc.loadApp")}`,
-          `    closeApp (kill) <uuid>           - ${this.t("terminal.helpDesc.closeApp")}`,
-          `    focusApp (focus) <uuid>          - ${this.t("terminal.helpDesc.focusApp")}`,
+          `    closeApp (kill) <uuid|prefix>    - ${this.t("terminal.helpDesc.closeApp")}`,
+          `    focusApp (focus) <uuid|prefix>   - ${this.t("terminal.helpDesc.focusApp")}`,
           `    sendMessage (send) <uuid> <msg>  - ${this.t("terminal.helpDesc.sendMessage")}`,
           "  User & Session:",
           `    currentUser (whoami)             - ${this.t("terminal.helpDesc.currentUser")}`,
@@ -514,13 +538,14 @@ export default class ESKishApp extends ESKitApp {
   }
 
   /**
-   * ターミナル出力バッファに行を追加する。
+   * ターミナル出力バッファに行を追加する（最大 1000 行）。
    * @param {"command"|"success"|"error"|"info"} type 行の種類
    * @param {string} text 表示テキスト
    * @param {string} [prompt] コマンド行の場合のプロンプト文字列
    */
   #appendLine(type, text, prompt = null) {
-    this.#lines.value = [...this.#lines.value, { type, text, prompt }];
+    const next = [...this.#lines.value, { type, text, prompt }];
+    this.#lines.value = next.length > 1000 ? next.slice(-1000) : next;
   }
 
   /**
