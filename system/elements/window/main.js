@@ -73,7 +73,7 @@ export default class ESKitWindowElement extends HTMLElement {
     const ws = window.System?.WindowSystem;
     if (!ws) return;
     this.style.zIndex = window.System.nextZIndex();
-    for (const [, win] of ws._getAllElements()) {
+    for (const win of ws.getAllElements()) {
       win.classList.toggle("focused", win === this);
     }
   }
@@ -184,24 +184,31 @@ export default class ESKitWindowElement extends HTMLElement {
       }
     });
 
-    header.addEventListener("pointerup", (e) => {
+    const endDrag = (e, isCancel = false) => {
       if (!dragging) return;
       dragging = false;
-      header.releasePointerCapture(e.pointerId);
+      try {
+        header.releasePointerCapture(e.pointerId);
+      } catch {}
 
       const ws = window.System?.WindowSystem;
       ws?.showSnapPreview(null);
 
-      if (e.clientY <= SNAP_EDGE) {
-        this.maximize();
-      } else if (e.clientX <= SNAP_EDGE) {
-        this.snap("left");
-        ws?.showSnapAssist("left", this.id);
-      } else if (e.clientX >= window.innerWidth - SNAP_EDGE) {
-        this.snap("right");
-        ws?.showSnapAssist("right", this.id);
+      if (!isCancel) {
+        if (e.clientY <= SNAP_EDGE) {
+          this.maximize();
+        } else if (e.clientX <= SNAP_EDGE) {
+          this.snap("left");
+          ws?.showSnapAssist("left", this.id);
+        } else if (e.clientX >= window.innerWidth - SNAP_EDGE) {
+          this.snap("right");
+          ws?.showSnapAssist("right", this.id);
+        }
       }
-    });
+    };
+
+    header.addEventListener("pointerup", (e) => endDrag(e, false));
+    header.addEventListener("pointercancel", (e) => endDrag(e, true));
   }
 
   // ─── リサイズ ─────────────────────────────────────────────────────────────
@@ -217,7 +224,9 @@ export default class ESKitWindowElement extends HTMLElement {
     let startX, startY, startRect;
     let resizing = false;
 
-    const dirs = handle.className.replace("resize-handle resize-", "");
+    const dirs = handle.dataset.dir ||
+      [...handle.classList].find(c => c.startsWith("resize-") && c !== "resize-handle")?.replace("resize-", "") ||
+      "";
 
     handle.addEventListener("pointerdown", (e) => {
       if (this.getAttribute("mode") === "mobile") return;
@@ -267,11 +276,16 @@ export default class ESKitWindowElement extends HTMLElement {
       this.style.height = `${height}px`;
     });
 
-    handle.addEventListener("pointerup", (e) => {
+    const endResize = (e) => {
       if (!resizing) return;
       resizing = false;
-      handle.releasePointerCapture(e.pointerId);
-    });
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+    };
+
+    handle.addEventListener("pointerup", endResize);
+    handle.addEventListener("pointercancel", endResize);
   }
 
   // ─── ユーティリティ ────────────────────────────────────────────────────────

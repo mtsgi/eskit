@@ -254,6 +254,9 @@ export default class ESKitSystem {
 
     // コンテキストメニュー: デスクトップ右クリック
     window.addEventListener("contextmenu", (e) => {
+      if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (e.target.closest("eskit-window")) return;
+
       e.preventDefault();
       const cm = this.WindowSystem?.contextMenu;
       if (!cm) return;
@@ -292,6 +295,7 @@ export default class ESKitSystem {
     // グローバルキーバインド: Ctrl+Space / Cmd+Space でスポットライト
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" && (e.ctrlKey || e.metaKey)) {
+        if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
         e.preventDefault();
         this.WindowSystem?.beacon?.toggle();
       }
@@ -349,19 +353,24 @@ export default class ESKitSystem {
     const app = this.getApp(uuid);
     if (!app) return;
 
-    app.close();
-    app._hamonScope?.dispose();
-    app._state = "closed";
-    // WindowSystem.close() が activeUuid をリセットする前に記録する
-    const wasActive = this.WindowSystem.activeUuid === uuid;
-    this.WindowSystem.close(uuid);
-    this.permissions.revoke(uuid);
-    this.#process.delete(uuid);
-    this.events.emit("app:closed", { uuid });
+    try {
+      app.close();
+    } catch (e) {
+      console.error(`[ESKitSystem] Error during app.close() for ${uuid}:`, e);
+    } finally {
+      app._hamonScope?.dispose();
+      app._state = "closed";
+      // WindowSystem.close() が activeUuid をリセットする前に記録する
+      const wasActive = this.WindowSystem.activeUuid === uuid;
+      this.WindowSystem.close(uuid);
+      this.permissions.revoke(uuid);
+      this.#process.delete(uuid);
+      this.events.emit("app:closed", { uuid });
 
-    // モバイルモードではアクティブアプリが閉じられたらドロワーを開く
-    if (this.shellMode.isMobile && wasActive) {
-      this.WindowSystem.drawer?.open();
+      // モバイルモードではアクティブアプリが閉じられたらドロワーを開く
+      if (this.shellMode.isMobile && wasActive) {
+        this.WindowSystem.drawer?.open();
+      }
     }
   }
 

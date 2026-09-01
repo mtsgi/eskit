@@ -530,21 +530,32 @@ function _bindTextNodes(rootNode, values, slots, scope) {
       markerNode.parentNode.replaceChild(anchorComment, markerNode);
       /** @type {Node[]} 現在 DOM に挿入されているノード群 */
       let currentNodes = [];
+      /** @type {HamonScope[]} 現在マウントされている子スコープ群 */
+      let currentScopes = [];
 
       const getter = typeof boundValue === "function"
         ? boundValue
         : () => boundValue.value;
 
+      scope.onDispose(() => {
+        for (const childScope of currentScopes) childScope?.dispose();
+        currentScopes = [];
+      });
+
       scope.effect(() => {
         const result = getter();
-        // 旧ノードを除去
+        // 旧ノードを除去 & 旧スコープを破棄
         for (const oldNode of currentNodes) oldNode.remove();
         currentNodes = [];
+        for (const oldScope of currentScopes) oldScope?.dispose();
+        currentScopes = [];
+
         // 結果の型に応じて新ノードを挿入
         if (Array.isArray(result)) {
           const parentNode = anchorComment.parentNode;
           for (const item of result) {
             if (item instanceof DocumentFragment) {
+              if (item._scope) currentScopes.push(item._scope);
               const nodes = [...item.childNodes];
               for (const n of nodes) parentNode.insertBefore(n, anchorComment);
               currentNodes.push(...nodes);
@@ -558,6 +569,7 @@ function _bindTextNodes(rootNode, values, slots, scope) {
             }
           }
         } else if (result instanceof DocumentFragment) {
+          if (result._scope) currentScopes.push(result._scope);
           const insertedNodes = [...result.childNodes];
           const parentNode = anchorComment.parentNode;
           for (const childNode of insertedNodes) parentNode.insertBefore(childNode, anchorComment);
