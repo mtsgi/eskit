@@ -1,26 +1,24 @@
 import style from "./style.js";
-import template from "./template.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
  * ESKitTaskbarElement — デスクトップモード用タスクバー
- *
- * 画面下部に固定表示され、ランチャーボタン・起動中アプリ一覧・時計を表示する。
- * モバイルモードでは非表示 (ESKitHomeBarElement + ESKitDrawerElement が代替)。
- *
- * 属性:
- *   mode — "desktop" | "mobile"  (ESKitWindowSystem が設定)
  */
 export default class ESKitTaskbarElement extends HTMLElement {
   #offOpened = null;
   #offClosed = null;
   #offFocused = null;
   #offTitleChanged = null;
+  #offLocale = null;
   #clockTimer = null;
+  #scope = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   static get observedAttributes() {
@@ -39,6 +37,8 @@ export default class ESKitTaskbarElement extends HTMLElement {
     this.#offClosed?.();
     this.#offFocused?.();
     this.#offTitleChanged?.();
+    this.#offLocale?.();
+    this.#scope?.dispose();
     if (this.#clockTimer != null) {
       clearInterval(this.#clockTimer);
       this.#clockTimer = null;
@@ -52,7 +52,8 @@ export default class ESKitTaskbarElement extends HTMLElement {
   // ─── 描画 ───────────────────────────────────────────────────────────────
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {
@@ -64,37 +65,36 @@ export default class ESKitTaskbarElement extends HTMLElement {
   // ─── イベント ──────────────────────────────────────────────────────────
 
   #bindEvents() {
-    // ランチャーボタン
-    this.shadowRoot.getElementById("launcher-btn").addEventListener("click", () => {
+    this.shadowRoot.getElementById("launcher-btn")?.addEventListener("click", () => {
       window.System?.events.emit("launcher:toggle");
     });
 
-    // 時計クリック → クイック設定パネル
-    this.shadowRoot.getElementById("clock").addEventListener("click", () => {
+    this.shadowRoot.getElementById("clock")?.addEventListener("click", () => {
       window.System?.WindowSystem?.quickSettings?.toggle();
     });
 
     const sys = window.System;
     if (!sys) return;
 
-    // アプリ起動 → ボタン追加
-    this.#offOpened = sys.events.on("app:opened", ({ uuid, name, icon }) => {
-      this.#addAppButton(uuid, name, icon);
+    this.#offOpened = sys.events.on("app:opened", ({ uuid, name, icon, manifest }) => {
+      const displayName = manifest ? sys.i18n?.getAppName(manifest) : name;
+      this.#addAppButton(uuid, displayName, icon);
     });
 
-    // アプリ終了 → ボタン削除
     this.#offClosed = sys.events.on("app:closed", ({ uuid }) => {
       this.#removeAppButton(uuid);
     });
 
-    // フォーカス変更 → ハイライト更新
     this.#offFocused = sys.events.on("app:focused", ({ uuid }) => {
       this.#setActive(uuid);
     });
 
-    // タイトル変更 → ボタンテキスト更新
     this.#offTitleChanged = sys.events.on("app:titleChanged", ({ uuid, title }) => {
       this.#updateAppButton(uuid, title);
+    });
+
+    this.#offLocale = sys.events.on("system:locale-changed", () => {
+      this.#updateClock();
     });
   }
 
@@ -121,7 +121,6 @@ export default class ESKitTaskbarElement extends HTMLElement {
     });
     container.appendChild(btn);
 
-    // 新規起動はアクティブ扱い
     this.#setActive(uuid);
   }
 
@@ -165,6 +164,7 @@ export default class ESKitTaskbarElement extends HTMLElement {
     const el = this.shadowRoot.getElementById("clock");
     if (!el) return;
     const now = new Date();
-    el.textContent = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    el.textContent = window.System?.i18n?.formatTime(now) || now.toLocaleTimeString();
+    el.title = window.System?.i18n?.formatDate(now) || now.toLocaleDateString();
   }
 }

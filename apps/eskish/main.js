@@ -43,7 +43,7 @@ export default class ESKishApp extends ESKitApp {
     this.template = hamon`
       <div class="terminal" @click=${() => this.#focusInput()}>
         <div class="output" id="output">
-          <div class="line info"><span class="text">ESKish Terminal v1.0.0 — Type "help" for a list of commands.</span></div>
+          <div class="line info"><span class="text">${() => this.t("terminal.banner")}</span></div>
           ${list(
             () => this.#lines.value,
             (item) => hamon`<div class="line ${() => item.type}">${() => item.prompt ? hamon`<span class="prompt">${item.prompt}</span>` : ""}<span class="text">${() => item.text}</span></div>`,
@@ -72,7 +72,10 @@ export default class ESKishApp extends ESKitApp {
    * アプリウィンドウ表示後の初期化処理。タイトルを設定し入力欄にフォーカスを当てる。
    */
   initialize() {
-    this.setTitle("ESKish");
+    this.setTitle(this.t("apps.eskish.name"));
+    this.hamon.effect(() => {
+      this.setTitle(this.t("apps.eskish.name"));
+    });
     this.#focusInput();
   }
 
@@ -307,8 +310,15 @@ export default class ESKishApp extends ESKitApp {
       case "changeDir":
       case "cd": {
         const target = this.#resolvePath(args[0] || "~");
-        const exists = await this.fs.exists(target);
-        if (!exists) throw new Error(`Directory not found: ${target}`);
+        let stat;
+        try {
+          stat = await this.fs.stat(target);
+        } catch {
+          throw new Error(`Directory not found: ${target}`);
+        }
+        if (stat.type !== "dir") {
+          throw new Error(`Not a directory: ${target}`);
+        }
         this.#cwd = target;
         return "";
       }
@@ -340,9 +350,17 @@ export default class ESKishApp extends ESKitApp {
       case "loadApp":
       case "open": {
         if (!args[0]) throw new Error("Usage: loadApp <appDir|appId>");
-        let appDir = args[0];
-        if (!appDir.endsWith("/") && !appDir.includes(".")) {
-          appDir = `apps/${appDir}/`;
+        const target = args[0];
+        const registered = System.registry.list().find((a) => a.id === target);
+        let appDir = registered?._dir;
+
+        if (!appDir) {
+          appDir = target;
+          if (!appDir.endsWith("/") && !appDir.startsWith("apps/")) {
+            appDir = `apps/${appDir}/`;
+          } else if (!appDir.endsWith("/")) {
+            appDir = `${appDir}/`;
+          }
         }
         const uuid = await System.loadApp(appDir);
         return `Loaded app "${appDir}" (UUID: ${uuid.slice(0, 8)})`;
@@ -350,10 +368,10 @@ export default class ESKishApp extends ESKitApp {
 
       case "closeApp":
       case "kill": {
-        if (!args[0]) throw new Error("Usage: closeApp <uuid>");
-        const uuid = args[0];
-        System.closeApp(uuid);
-        return `Closed app ${uuid}`;
+        if (!args[0]) throw new Error("Usage: closeApp <uuid|prefix>");
+        const targetUuid = await this.#resolveProcessUuid(args[0]);
+        System.closeApp(targetUuid);
+        return `Closed app ${targetUuid.slice(0, 8)}`;
       }
 
       case "focusApp":
@@ -383,6 +401,9 @@ export default class ESKishApp extends ESKitApp {
       // ─── ユーザー ──────────────────────────────────────────────────────────
       case "currentUser":
       case "whoami": {
+        if (!await System.permissions.check(this._uuid, "user.info")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "user.info" denied`);
+        }
         const user = System.currentUser;
         if (!user) return "No active user session";
         return `${user.name} (${user.id}) ${user.isAdmin ? "[admin]" : "[user]"}`;
@@ -390,6 +411,9 @@ export default class ESKishApp extends ESKitApp {
 
       case "listUsers":
       case "users": {
+        if (!await System.permissions.check(this._uuid, "user.info")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "user.info" denied`);
+        }
         const list = System.users.list();
         return ["ID            NAME              ROLE", "─".repeat(40)]
           .concat(list.map((u) => `${u.id.padEnd(12)}  ${u.name.padEnd(16)}  ${u.isAdmin ? "admin" : "user"}`))
@@ -443,9 +467,12 @@ export default class ESKishApp extends ESKitApp {
       }
 
       case "notify": {
+        if (!await System.permissions.check(this._uuid, "notifications")) {
+          throw new Error(`[ESKitApp:${this.name}] Permission "notifications" denied`);
+        }
         const title = args[0] || "ESKish";
         const message = args.slice(1).join(" ") || "Notification from ESKish";
-        await this.showNotification({ title, message });
+        System.notify({ title, message });
         return "Notification sent";
       }
 
@@ -471,53 +498,54 @@ export default class ESKishApp extends ESKitApp {
       case "help":
       case "?": {
         return [
-          "ESKish Available Commands:",
+          this.t("terminal.helpTitle"),
           "  File Operations:",
-          "    readFile (cat) <path>            - Read and display file content",
-          "    writeFile (write) <path> <text>  - Write text to file",
-          "    readDir (ls, dir) [path]         - List directory entries",
-          "    makeDir (mkdir) <path>           - Create directory",
-          "    remove (rm) <path>               - Delete file or directory",
-          "    rename (mv) <from> <to>          - Move / rename file or dir",
-          "    stat <path>                      - Show entry metadata",
+          `    readFile (cat) <path>            - ${this.t("terminal.helpDesc.readFile")}`,
+          `    writeFile (write) <path> <text>  - ${this.t("terminal.helpDesc.writeFile")}`,
+          `    readDir (ls, dir) [path]         - ${this.t("terminal.helpDesc.readDir")}`,
+          `    makeDir (mkdir) <path>           - ${this.t("terminal.helpDesc.makeDir")}`,
+          `    remove (rm) <path>               - ${this.t("terminal.helpDesc.remove")}`,
+          `    rename (mv) <from> <to>          - ${this.t("terminal.helpDesc.rename")}`,
+          `    stat <path>                      - ${this.t("terminal.helpDesc.stat")}`,
           "  Navigation:",
-          "    changeDir (cd) [path]            - Change current directory (~, .. supported)",
-          "    currentDir (pwd)                 - Print current directory",
+          `    changeDir (cd) [path]            - ${this.t("terminal.helpDesc.changeDir")}`,
+          `    currentDir (pwd)                 - ${this.t("terminal.helpDesc.currentDir")}`,
           "  Processes & Apps:",
-          "    listProcesses (ps)               - List running processes",
-          "    listApps (apps)                  - List all registered applications",
-          "    loadApp (open) <dir|id>          - Launch an app",
-          "    closeApp (kill) <uuid>           - Terminate an app",
-          "    focusApp (focus) <uuid>          - Bring app window to focus",
-          "    sendMessage (send) <uuid> <msg>  - Send IPC message to process",
+          `    listProcesses (ps)               - ${this.t("terminal.helpDesc.listProcesses")}`,
+          `    listApps (apps)                  - ${this.t("terminal.helpDesc.listApps")}`,
+          `    loadApp (open) <dir|id>          - ${this.t("terminal.helpDesc.loadApp")}`,
+          `    closeApp (kill) <uuid|prefix>    - ${this.t("terminal.helpDesc.closeApp")}`,
+          `    focusApp (focus) <uuid|prefix>   - ${this.t("terminal.helpDesc.focusApp")}`,
+          `    sendMessage (send) <uuid> <msg>  - ${this.t("terminal.helpDesc.sendMessage")}`,
           "  User & Session:",
-          "    currentUser (whoami)             - Show current user info",
-          "    listUsers (users)                - List registered users",
-          "    logout                           - Log out current session",
+          `    currentUser (whoami)             - ${this.t("terminal.helpDesc.currentUser")}`,
+          `    listUsers (users)                - ${this.t("terminal.helpDesc.listUsers")}`,
+          `    logout                           - ${this.t("terminal.helpDesc.logout")}`,
           "  System & Utilities:",
-          "    systemInfo (sysinfo)             - Display system overview and status",
-          "    setShellMode (mode) [mode]       - Get or set shell mode (desktop/mobile/auto)",
-          "    history                          - Display command history",
-          "    notify <title> [message]         - Trigger system notification",
-          "    eval (js) <code...>              - Execute JavaScript expression",
-          "    clear (cls)                      - Clear terminal output",
-          "    help (?)                         - Display this help message",
+          `    systemInfo (sysinfo)             - ${this.t("terminal.helpDesc.systemInfo")}`,
+          `    setShellMode (mode) [mode]       - ${this.t("terminal.helpDesc.setShellMode")}`,
+          `    history                          - ${this.t("terminal.helpDesc.history")}`,
+          `    notify <title> [message]         - ${this.t("terminal.helpDesc.notify")}`,
+          `    eval (js) <code...>              - ${this.t("terminal.helpDesc.eval")}`,
+          `    clear (cls)                      - ${this.t("terminal.helpDesc.clear")}`,
+          `    help (?)                         - ${this.t("terminal.helpDesc.help")}`,
         ].join("\n");
       }
 
       default:
-        throw new Error(`Unknown command: "${cmd}". Type "help" for available commands.`);
+        throw new Error(this.t("terminal.cmdNotFound", { cmd }));
     }
   }
 
   /**
-   * ターミナル出力バッファに行を追加する。
+   * ターミナル出力バッファに行を追加する（最大 1000 行）。
    * @param {"command"|"success"|"error"|"info"} type 行の種類
    * @param {string} text 表示テキスト
    * @param {string} [prompt] コマンド行の場合のプロンプト文字列
    */
   #appendLine(type, text, prompt = null) {
-    this.#lines.value = [...this.#lines.value, { type, text, prompt }];
+    const next = [...this.#lines.value, { type, text, prompt }];
+    this.#lines.value = next.length > 1000 ? next.slice(-1000) : next;
   }
 
   /**

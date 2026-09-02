@@ -1,6 +1,7 @@
-import style    from "./style.js";
-import template from "./template.js";
+import style from "./style.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 const MIN_W = 220;
 const MIN_H = 120;
@@ -8,22 +9,16 @@ const SNAP_EDGE = 8;
 
 /**
  * ESKitWindowElement — アプリウィンドウ
- *
- * 属性:
- *   mode   — "desktop" | "mobile"  (レイアウト切替)
- *   active — mobile モードで全画面表示するかどうか (boolean)
- *
- * 状態:
- *   normal / minimized / maximized
- *   (snapped は normal の一種。_prevRect で復元)
  */
 export default class ESKitWindowElement extends HTMLElement {
-  _state    = "normal";
+  _state = "normal";
   _prevRect = null;
+  #scope = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   static get observedAttributes() {
@@ -36,7 +31,6 @@ export default class ESKitWindowElement extends HTMLElement {
     this.#initDrag();
     this.#initResize();
 
-    // デスクトップモードでクリック時にフォーカスを取得
     this.addEventListener("pointerdown", () => {
       if (this.getAttribute("mode") !== "mobile") {
         window.System?.WindowSystem?.activateWindow(this.id);
@@ -44,12 +38,16 @@ export default class ESKitWindowElement extends HTMLElement {
     });
   }
 
+  disconnectedCallback() {
+    this.#scope?.dispose();
+  }
+
   attributeChangedCallback() {
-    // 属性変更は CSS :host([mode="?"]) / :host([active]) が制御
   }
 
   render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
 
     const styleSheet = new CSSStyleSheet();
     styleSheet.replaceSync(style);
@@ -58,19 +56,11 @@ export default class ESKitWindowElement extends HTMLElement {
 
   // ─── パブリック API ────────────────────────────────────────────────────────
 
-  /**
-   * ウィンドウタイトルを更新する。
-   * @param {string} title
-   */
   setTitle(title) {
     const el = this.shadowRoot?.querySelector(".app-title");
     if (el) el.textContent = title;
   }
 
-  /**
-   * ウィンドウヘッダーのアプリアイコンを更新する。
-   * @param {object|null} iconDef
-   */
   setIcon(iconDef) {
     const el = this.shadowRoot?.getElementById("window-icon");
     if (!el) return;
@@ -79,31 +69,21 @@ export default class ESKitWindowElement extends HTMLElement {
     if (iconEl) el.appendChild(iconEl);
   }
 
-  /**
-   * ウィンドウを最前面にフォーカスする。
-   */
   focus() {
     const ws = window.System?.WindowSystem;
     if (!ws) return;
     this.style.zIndex = window.System.nextZIndex();
-    // focused クラスを排他的に管理
-    for (const [, win] of ws._getAllElements()) {
+    for (const win of ws.getAllElements()) {
       win.classList.toggle("focused", win === this);
     }
   }
 
-  /**
-   * ウィンドウを最小化する。
-   */
   minimize() {
     if (this._state === "minimized") return;
     this._state = "minimized";
     this.classList.add("minimized");
   }
 
-  /**
-   * ウィンドウを最大化する。
-   */
   maximize() {
     if (this._state === "maximized") return;
     this.#savePrevRect();
@@ -113,9 +93,6 @@ export default class ESKitWindowElement extends HTMLElement {
     this.shadowRoot.querySelector(".btn-maximize eskit-icon")?.setAttribute("name", "minimize-2");
   }
 
-  /**
-   * ウィンドウを通常状態に復元する。
-   */
   restore() {
     const prev = this._state;
     this._state = "normal";
@@ -129,10 +106,6 @@ export default class ESKitWindowElement extends HTMLElement {
     }
   }
 
-  /**
-   * ウィンドウを画面の左半分または右半分にスナップする。
-   * @param {"left"|"right"} side
-   */
   snap(side) {
     if (this._state === "maximized" || this._state === "minimized") {
       this.restore();
@@ -159,7 +132,6 @@ export default class ESKitWindowElement extends HTMLElement {
       }
     });
 
-    // タイトルバーダブルクリックで最大化/復元トグル
     this.shadowRoot.querySelector(".app-header")?.addEventListener("dblclick", (e) => {
       if (e.target.closest(".app-controls")) return;
       if (this._state === "maximized") {
@@ -180,12 +152,10 @@ export default class ESKitWindowElement extends HTMLElement {
     let dragging = false;
 
     header.addEventListener("pointerdown", (e) => {
-      // コントロールボタンは除外
       if (e.target.closest(".app-controls")) return;
       if (this.getAttribute("mode") === "mobile") return;
       if (this._state === "maximized") return;
 
-      // スナップ状態からドラッグ開始時はスナップを解除する
       const wasSnapped = this.classList.contains("snapped-left") || this.classList.contains("snapped-right");
       if (wasSnapped) {
         this.restore();
@@ -207,7 +177,6 @@ export default class ESKitWindowElement extends HTMLElement {
       this.style.left = `${startLeft + dx}px`;
       this.style.top  = `${startTop + dy}px`;
 
-      // スナッププレビュー表示
       const ws = window.System?.WindowSystem;
       if (ws) {
         const zone = this.#detectSnapZone(e.clientX, e.clientY);
@@ -215,26 +184,31 @@ export default class ESKitWindowElement extends HTMLElement {
       }
     });
 
-    header.addEventListener("pointerup", (e) => {
+    const endDrag = (e, isCancel = false) => {
       if (!dragging) return;
       dragging = false;
-      header.releasePointerCapture(e.pointerId);
+      try {
+        header.releasePointerCapture(e.pointerId);
+      } catch {}
 
-      // プレビューを非表示
       const ws = window.System?.WindowSystem;
       ws?.showSnapPreview(null);
 
-      // スナップ判定
-      if (e.clientY <= SNAP_EDGE) {
-        this.maximize();
-      } else if (e.clientX <= SNAP_EDGE) {
-        this.snap("left");
-        ws?.showSnapAssist("left", this.id);
-      } else if (e.clientX >= window.innerWidth - SNAP_EDGE) {
-        this.snap("right");
-        ws?.showSnapAssist("right", this.id);
+      if (!isCancel) {
+        if (e.clientY <= SNAP_EDGE) {
+          this.maximize();
+        } else if (e.clientX <= SNAP_EDGE) {
+          this.snap("left");
+          ws?.showSnapAssist("left", this.id);
+        } else if (e.clientX >= window.innerWidth - SNAP_EDGE) {
+          this.snap("right");
+          ws?.showSnapAssist("right", this.id);
+        }
       }
-    });
+    };
+
+    header.addEventListener("pointerup", (e) => endDrag(e, false));
+    header.addEventListener("pointercancel", (e) => endDrag(e, true));
   }
 
   // ─── リサイズ ─────────────────────────────────────────────────────────────
@@ -250,8 +224,9 @@ export default class ESKitWindowElement extends HTMLElement {
     let startX, startY, startRect;
     let resizing = false;
 
-    // ハンドルの方向を判定
-    const dirs = handle.className.replace("resize-handle resize-", "");
+    const dirs = handle.dataset.dir ||
+      [...handle.classList].find(c => c.startsWith("resize-") && c !== "resize-handle")?.replace("resize-", "") ||
+      "";
 
     handle.addEventListener("pointerdown", (e) => {
       if (this.getAttribute("mode") === "mobile") return;
@@ -301,11 +276,16 @@ export default class ESKitWindowElement extends HTMLElement {
       this.style.height = `${height}px`;
     });
 
-    handle.addEventListener("pointerup", (e) => {
+    const endResize = (e) => {
       if (!resizing) return;
       resizing = false;
-      handle.releasePointerCapture(e.pointerId);
-    });
+      try {
+        handle.releasePointerCapture(e.pointerId);
+      } catch {}
+    };
+
+    handle.addEventListener("pointerup", endResize);
+    handle.addEventListener("pointercancel", endResize);
   }
 
   // ─── ユーティリティ ────────────────────────────────────────────────────────

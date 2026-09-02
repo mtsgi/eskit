@@ -1,15 +1,10 @@
 import style from "./style.js";
-import template from "./template.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
  * ESKitBeaconElement — グローバル検索オーバーレイ
- *
- * Ctrl+Space (Mac: Cmd+Space) でトグルし、レジストリのアプリを
- * リアルタイム検索・起動できる。
- *
- * 属性:
- *   open — オーバーレイ表示中 (boolean attribute)
  */
 export default class ESKitBeaconElement extends HTMLElement {
   #inputEl = null;
@@ -17,10 +12,13 @@ export default class ESKitBeaconElement extends HTMLElement {
   #overlayEl = null;
   #selectedIndex = -1;
   #currentResults = [];
+  #scope = null;
+  #offLocale = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   connectedCallback() {
@@ -32,26 +30,28 @@ export default class ESKitBeaconElement extends HTMLElement {
     this.#bindEvents();
   }
 
+  disconnectedCallback() {
+    this.#offLocale?.();
+    this.#scope?.dispose();
+  }
+
   get isOpen() {
     return this.hasAttribute("open");
   }
 
-  /** スポットライトを開く */
   show() {
     this.setAttribute("open", "");
-    this.#inputEl.value = "";
+    if (this.#inputEl) this.#inputEl.value = "";
     this.#selectedIndex = -1;
     this.#currentResults = [];
     this.#refresh("");
-    requestAnimationFrame(() => this.#inputEl.focus());
+    requestAnimationFrame(() => this.#inputEl?.focus());
   }
 
-  /** スポットライトを閉じる */
   hide() {
     this.removeAttribute("open");
   }
 
-  /** 開閉トグル */
   toggle() {
     this.isOpen ? this.hide() : this.show();
   }
@@ -69,9 +69,11 @@ export default class ESKitBeaconElement extends HTMLElement {
   }
 
   #renderResults() {
+    if (!this.#resultsEl) return;
     this.#resultsEl.innerHTML = "";
     if (this.#currentResults.length === 0) {
-      this.#resultsEl.innerHTML = `<p class="empty-message">候補が見つかりません</p>`;
+      const emptyText = window.System?.i18n?.t("system.noResults") || "候補が見つかりません";
+      this.#resultsEl.innerHTML = `<p class="empty-message">${this.#esc(emptyText)}</p>`;
       return;
     }
     for (let i = 0; i < this.#currentResults.length; i++) {
@@ -84,11 +86,14 @@ export default class ESKitBeaconElement extends HTMLElement {
       const iconEl = window.System?.icons?.createAppIcon(manifest.icon, { size: 18 });
       if (iconEl) iconSpan.appendChild(iconEl);
 
+      const localizedName = window.System?.i18n?.getAppName(manifest) || manifest.name;
+      const localizedDesc = window.System?.i18n?.getAppDescription(manifest) || manifest.description || manifest.id;
+
       const infoSpan = document.createElement("span");
       infoSpan.className = "result-info";
       infoSpan.innerHTML = `
-        <span class="result-name">${this.#esc(manifest.name)}</span>
-        <span class="result-desc">${this.#esc(manifest.description || manifest.id)}</span>
+        <span class="result-name">${this.#esc(localizedName)}</span>
+        <span class="result-desc">${this.#esc(localizedDesc)}</span>
       `;
 
       btn.appendChild(iconSpan);
@@ -106,22 +111,19 @@ export default class ESKitBeaconElement extends HTMLElement {
   }
 
   #updateSelection() {
-    const items = this.#resultsEl.querySelectorAll(".result-item");
+    const items = this.#resultsEl?.querySelectorAll(".result-item") || [];
     items.forEach((el, i) => {
       el.classList.toggle("-selected", i === this.#selectedIndex);
     });
-    // スクロールして見える位置に
     items[this.#selectedIndex]?.scrollIntoView({ block: "nearest" });
   }
 
   #bindEvents() {
-    // 検索入力
-    this.#inputEl.addEventListener("input", () => {
+    this.#inputEl?.addEventListener("input", () => {
       this.#refresh(this.#inputEl.value.trim());
     });
 
-    // キーボード操作
-    this.#inputEl.addEventListener("keydown", (e) => {
+    this.#inputEl?.addEventListener("keydown", (e) => {
       const len = this.#currentResults.length;
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -146,14 +148,20 @@ export default class ESKitBeaconElement extends HTMLElement {
       }
     });
 
-    // オーバーレイ背景クリックで閉じる
-    this.#overlayEl.addEventListener("click", (e) => {
+    this.#overlayEl?.addEventListener("click", (e) => {
       if (e.target === this.#overlayEl) this.hide();
+    });
+
+    this.#offLocale = window.System?.events?.on("system:locale-changed", () => {
+      if (this.isOpen) {
+        this.#refresh(this.#inputEl?.value.trim() || "");
+      }
     });
   }
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {

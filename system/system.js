@@ -6,8 +6,12 @@ import ESKitPermissions from "./permissions.js";
 import ESKitShellMode   from "./shell-mode.js";
 import ESKitUsers       from "./users.js";
 import ESKitIcons       from "./icons.js";
+import ESKitTheme       from "./theme.js";
+import ESKitI18n        from "./i18n.js";
 import ESKitLoginScreenElement from "./elements/login-screen/main.js";
 import ESKitIconElement        from "./elements/icon/main.js";
+import ESKitDialogElement      from "./elements/dialog/main.js";
+import ESKitNotificationContainerElement, { ESKitNotificationElement } from "./elements/notification/main.js";
 
 if (!customElements.get("eskit-icon")) {
   customElements.define("eskit-icon", ESKitIconElement);
@@ -15,6 +19,61 @@ if (!customElements.get("eskit-icon")) {
 
 if (!customElements.get("eskit-login-screen")) {
   customElements.define("eskit-login-screen", ESKitLoginScreenElement);
+}
+
+if (!customElements.get("eskit-dialog")) {
+  customElements.define("eskit-dialog", ESKitDialogElement);
+}
+
+if (!customElements.get("eskit-notification")) {
+  customElements.define("eskit-notification", ESKitNotificationElement);
+}
+
+if (!customElements.get("eskit-notification-container")) {
+  customElements.define("eskit-notification-container", ESKitNotificationContainerElement);
+}
+
+/**
+ * ESKitNotificationsStore — 通知履歴・センター管理
+ */
+class ESKitNotificationsStore {
+  #items = [];
+  #maxItems = 50;
+
+  list() {
+    return [...this.#items];
+  }
+
+  add(opts) {
+    const item = {
+      id: crypto.randomUUID(),
+      title: opts.title || window.System?.i18n?.t("notifications.title") || "Notification",
+      message: opts.message || "",
+      type: opts.type || "info",
+      icon: opts.icon || null,
+      time: Date.now(),
+      read: false,
+    };
+    this.#items.unshift(item);
+    if (this.#items.length > this.#maxItems) {
+      this.#items.length = this.#maxItems;
+    }
+    return item;
+  }
+
+  clear() {
+    this.#items = [];
+    window.System?.events?.emit("notifications:updated");
+  }
+
+  markAllRead() {
+    for (const it of this.#items) it.read = true;
+    window.System?.events?.emit("notifications:updated");
+  }
+
+  get unreadCount() {
+    return this.#items.filter(it => !it.read).length;
+  }
 }
 
 /**
@@ -25,18 +84,23 @@ if (!customElements.get("eskit-login-screen")) {
  * 完了後に "system:ready" イベントを発行する。
  */
 export default class ESKitSystem {
-  #process      = new Map(); // uuid → ESKitApp
-  #zIndex       = 100;
+  #process               = new Map(); // uuid → ESKitApp
+  #zIndex                = 100;
   #readyPromise;
-  #loginScreen  = null;
+  #loginScreen           = null;
+  #dialogElement         = null;
+  #notificationContainer = null;
 
-  events      = new ESKitEventBus();
-  fs          = new ESKitFileSystem();
-  registry    = new ESKitRegistry();
-  permissions = new ESKitPermissions();
-  shellMode   = new ESKitShellMode();
-  users       = new ESKitUsers();
-  icons       = new ESKitIcons();
+  events        = new ESKitEventBus();
+  fs            = new ESKitFileSystem();
+  registry      = new ESKitRegistry();
+  permissions   = new ESKitPermissions();
+  shellMode     = new ESKitShellMode();
+  users         = new ESKitUsers();
+  icons         = new ESKitIcons();
+  theme         = new ESKitTheme();
+  i18n          = new ESKitI18n();
+  notifications = new ESKitNotificationsStore();
 
   constructor() {
     window.System      = this;
@@ -53,6 +117,11 @@ export default class ESKitSystem {
     return this.users.getCurrent();
   }
 
+  /** 汎用ダイアログファサード */
+  get dialog() {
+    return this.#getDialogElement();
+  }
+
   // ─── 起動シーケンス ─────────────────────────────────────────────────────
 
   async #boot() {
@@ -62,6 +131,8 @@ export default class ESKitSystem {
     await this.#ensureDefaultAdmin();
     const user = await this.#ensureLogin();
     await this.#initCurrentUserDirs(user.id);
+    await this.theme.init();
+    await this.i18n.init();
     this.WindowSystem = new ESKitWindowSystem();
     await this.#registerBuiltinApps();
     this.initUI();
@@ -135,8 +206,22 @@ export default class ESKitSystem {
     return this.#loginScreen;
   }
 
+  #getDialogElement() {
+    if (this.#dialogElement) return this.#dialogElement;
+    this.#dialogElement = document.createElement("eskit-dialog");
+    document.body.appendChild(this.#dialogElement);
+    return this.#dialogElement;
+  }
+
+  #getNotificationContainer() {
+    if (this.#notificationContainer) return this.#notificationContainer;
+    this.#notificationContainer = document.createElement("eskit-notification-container");
+    document.body.appendChild(this.#notificationContainer);
+    return this.#notificationContainer;
+  }
+
   async #registerBuiltinApps() {
-    const builtin = ["apps/test/", "apps/welcome/", "apps/eskish/"];
+    const builtin = ["apps/test/", "apps/welcome/", "apps/eskish/", "apps/settings/"];
     for (const dir of builtin) {
       try {
         await this.registry.register(dir);
@@ -163,8 +248,15 @@ export default class ESKitSystem {
   // ─── シェル UI ─────────────────────────────────────────────────────────────
 
   initUI() {
+    // 通知コンテナ & ダイアログの初期化マウント
+    this.#getNotificationContainer();
+    this.#getDialogElement();
+
     // コンテキストメニュー: デスクトップ右クリック
     window.addEventListener("contextmenu", (e) => {
+      if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (e.target.closest("eskit-window")) return;
+
       e.preventDefault();
       const cm = this.WindowSystem?.contextMenu;
       if (!cm) return;
@@ -172,24 +264,29 @@ export default class ESKitSystem {
         this.shellMode.isMobile
           ? {
               icon: { set: "lucide", name: "monitor-smartphone" },
-              label: "ドロワーを開く",
+              label: this.i18n.t("system.openDrawer"),
               action: () => this.WindowSystem?.drawer?.toggle(),
             }
           : {
               icon: { set: "lucide", name: "boxes" },
-              label: "ランチャーを開く",
+              label: this.i18n.t("system.openLauncher"),
               action: () => this.events.emit("launcher:toggle"),
             },
         { separator: true },
         {
           icon: { set: "lucide", name: "search" },
-          label: "検索",
+          label: this.i18n.t("system.beacon"),
           action: () => this.WindowSystem?.beacon?.toggle(),
+        },
+        {
+          icon: { set: "lucide", name: "settings" },
+          label: this.i18n.t("system.openSettings"),
+          action: () => this.loadApp("apps/settings/"),
         },
         { separator: true },
         {
           icon: { set: "lucide", name: "refresh-cw" },
-          label: `${this.shellMode.isMobile ? "Desktop" : "Mobile"} モードに切替`,
+          label: `${this.shellMode.isMobile ? this.i18n.t("system.desktopMode") : this.i18n.t("system.mobileMode")} ${this.i18n.t("system.switchMode")}`,
           action: () => this.setShellMode(this.shellMode.isMobile ? "desktop" : "mobile"),
         },
       ]);
@@ -198,6 +295,7 @@ export default class ESKitSystem {
     // グローバルキーバインド: Ctrl+Space / Cmd+Space でスポットライト
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" && (e.ctrlKey || e.metaKey)) {
+        if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
         e.preventDefault();
         this.WindowSystem?.beacon?.toggle();
       }
@@ -255,19 +353,24 @@ export default class ESKitSystem {
     const app = this.getApp(uuid);
     if (!app) return;
 
-    app.close();
-    app._hamonScope?.dispose();
-    app._state = "closed";
-    // WindowSystem.close() が activeUuid をリセットする前に記録する
-    const wasActive = this.WindowSystem.activeUuid === uuid;
-    this.WindowSystem.close(uuid);
-    this.permissions.revoke(uuid);
-    this.#process.delete(uuid);
-    this.events.emit("app:closed", { uuid });
+    try {
+      app.close();
+    } catch (e) {
+      console.error(`[ESKitSystem] Error during app.close() for ${uuid}:`, e);
+    } finally {
+      app._hamonScope?.dispose();
+      app._state = "closed";
+      // WindowSystem.close() が activeUuid をリセットする前に記録する
+      const wasActive = this.WindowSystem.activeUuid === uuid;
+      this.WindowSystem.close(uuid);
+      this.permissions.revoke(uuid);
+      this.#process.delete(uuid);
+      this.events.emit("app:closed", { uuid });
 
-    // モバイルモードではアクティブアプリが閉じられたらドロワーを開く
-    if (this.shellMode.isMobile && wasActive) {
-      this.WindowSystem.drawer?.open();
+      // モバイルモードではアクティブアプリが閉じられたらドロワーを開く
+      if (this.shellMode.isMobile && wasActive) {
+        this.WindowSystem.drawer?.open();
+      }
     }
   }
 
@@ -291,6 +394,14 @@ export default class ESKitSystem {
       icon:  app._manifest?.icon ?? null,
       state: app._state,
     }));
+  }
+
+  /**
+   * 登録済みの全アプリマニフェスト一覧を返す。
+   * @returns {Manifest[]}
+   */
+  listApps() {
+    return this.registry.list();
   }
 
   /** 現在ユーザーのホームディレクトリを返す */
@@ -321,10 +432,12 @@ export default class ESKitSystem {
 
   /**
    * 通知を発行する。
-   * @param {{ title?: string, message?: string, duration?: number }} opts
+   * @param {{ title?: string, message?: string, type?: string, duration?: number, icon?: string, action?: { label: string, onClick?: () => void } }} opts
    */
   notify(opts) {
-    this.events.emit("notification:show", opts);
+    if (!opts) return;
+    const item = this.notifications.add(opts);
+    this.events.emit("notification:show", { ...opts, id: item.id });
   }
 
   /**

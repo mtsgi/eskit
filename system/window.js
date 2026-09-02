@@ -189,6 +189,7 @@ export default class ESKitWindowSystem {
     this.#activeUuid = uuid;
 
     if (this.system.shellMode.isMobile) {
+      this.#hideSnapAssist();
       // 全ウィンドウの active を更新
       for (const [id, win] of this.#appElements) {
         win.toggleAttribute("active", id === uuid);
@@ -217,7 +218,16 @@ export default class ESKitWindowSystem {
   }
 
   /**
+   * 全ウィンドウ要素を配列として返す。
+   * @returns {ESKitWindowElement[]}
+   */
+  getAllElements() {
+    return [...this.#appElements.values()];
+  }
+
+  /**
    * 全ウィンドウ要素を Map として返す。
+   * @deprecated getAllElements() を使用してください。
    * @returns {Map<string, ESKitWindowElement>}
    */
   _getAllElements() {
@@ -232,6 +242,9 @@ export default class ESKitWindowSystem {
   close(uuid) {
     const appElement = this.#appElements.get(uuid);
     if (!appElement) return;
+
+    this.#hideSnapAssist();
+    this.#hideSnapPreview();
 
     this.desktopElement.removeChild(appElement);
     this.#appElements.delete(uuid);
@@ -249,6 +262,9 @@ export default class ESKitWindowSystem {
    * @param {"desktop"|"mobile"} mode
    */
   #applyMode(mode) {
+    this.#hideSnapAssist();
+    this.#hideSnapPreview();
+
     // デスクトップ要素
     this.desktopElement.setAttribute("mode", mode);
     // シェル要素 (それぞれの CSS が :host([mode="?"]) で表示/非表示)
@@ -371,7 +387,7 @@ export default class ESKitWindowSystem {
 
     const title = document.createElement("div");
     title.className = "eskit-snap-assist-title";
-    title.textContent = "割り当てるアプリを選択";
+    title.textContent = this.system?.i18n?.t("system.snapAssistTitle") || "割り当てるアプリを選択";
     panel.appendChild(title);
 
     const grid = document.createElement("div");
@@ -381,7 +397,8 @@ export default class ESKitWindowSystem {
       const app = this.system.getApp(uuid);
       const btn = document.createElement("button");
       btn.className = "eskit-snap-assist-item";
-      btn.textContent = app?.name ?? uuid;
+      const appName = app ? (this.system?.i18n?.getAppName(app._manifest) || app.name) : uuid;
+      btn.textContent = appName;
       btn.addEventListener("click", () => {
         const oppositeSide = snappedSide === "left" ? "right" : "left";
         win.snap(oppositeSide);
@@ -404,6 +421,13 @@ export default class ESKitWindowSystem {
   }
 
   #snapAssistEl = null;
+
+  /**
+   * スナップアシストパネルを閉じる。
+   */
+  hideSnapAssist() {
+    this.#hideSnapAssist();
+  }
 
   #hideSnapAssist() {
     if (this.#snapAssistEl) {
