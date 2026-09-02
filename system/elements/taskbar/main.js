@@ -95,7 +95,6 @@ export default class ESKitTaskbarElement extends HTMLElement {
 
     this.#offLocale = sys.events.on("system:locale-changed", () => {
       this.#updateClock();
-      this.#refreshAppButtons();
     });
   }
 
@@ -143,15 +142,6 @@ export default class ESKitTaskbarElement extends HTMLElement {
       } else {
         btn.textContent = title;
       }
-    }
-  }
-
-  #refreshAppButtons() {
-    const procs = window.System?.listProcesses() || [];
-    for (const proc of procs) {
-      const app = window.System?.getApp(proc.uuid);
-      const title = app?.name || proc.name;
-      this.#updateAppButton(proc.uuid, title);
     }
   }
 

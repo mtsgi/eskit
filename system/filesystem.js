@@ -148,6 +148,7 @@ export default class ESKitFileSystem {
   async mkdir(path, { recursive = false } = {}) {
     const normalPath = this.#normalize(path);
     if (normalPath === "/") return;
+    await this.#assertAccess(normalPath, "write");
     if (await this.exists(normalPath)) return;
 
     if (recursive) {
@@ -161,7 +162,6 @@ export default class ESKitFileSystem {
         }
       }
     } else {
-      await this.#assertAccess(normalPath, "write");
       await this.#mkdirOne(normalPath);
     }
   }

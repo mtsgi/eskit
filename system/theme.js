@@ -46,8 +46,7 @@ export default class ESKitTheme {
     // auto: テーマ自体の dark フラグ or OS prefers-color-scheme
     const theme = this.getTheme(this.#themeId);
     if (theme && typeof theme.dark === "boolean") {
-      // mode が auto でテーマが dark/light 指定を持つ場合、OS に合わせて同系のプリセットを優先
-      return this.#mediaQuery?.matches ?? true;
+      return theme.dark;
     }
     return this.#mediaQuery?.matches ?? true;
   }

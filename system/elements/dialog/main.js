@@ -204,7 +204,7 @@ export default class ESKitDialogElement extends HTMLElement {
       if (content) {
         this.#customContainer.classList.remove("kit-hidden");
         if (typeof content === "string") {
-          this.#customContainer.innerHTML = content;
+          this.#customContainer.textContent = content;
         } else if (content instanceof Node) {
           this.#customContainer.appendChild(content);
         }

@@ -39,6 +39,7 @@ export default class ESKitApp {
     if (!this._manifest) return null;
     return Object.freeze({
       ...this._manifest,
+      icon: this._manifest.icon ? Object.freeze({ ...this._manifest.icon }) : null,
       permissions: Object.freeze([...(this._manifest.permissions || [])]),
     });
   }

@@ -10,6 +10,7 @@ import { signal } from "./hamon.js";
 export default class ESKitI18n {
   /** @type {import('./hamon.js').Signal<string>} */
   locale = signal("ja");
+  #revision = signal(0);
   #dictionaries = new Map(); // lang -> dict object
   #available = ["ja", "en"];
 
@@ -123,8 +124,9 @@ export default class ESKitI18n {
    * @returns {string}
    */
   t(key, vars = {}) {
-    // 依存追跡のために locale.value を参照する
+    // 依存追跡のために locale.value と #revision.value を参照する
     const currentLang = this.locale.value;
+    void this.#revision.value;
 
     const dict = this.#dictionaries.get(currentLang);
     let val = this.#getNested(dict, key);
@@ -164,7 +166,7 @@ export default class ESKitI18n {
     target[appId] = { ...(target[appId] || {}), ...dict };
     // locale が対象言語であればシグナル更新をトリガー
     if (this.locale.value === lang) {
-      this.locale.value = lang; // trigger subscribers
+      this.#revision.value++;
     }
   }
 
