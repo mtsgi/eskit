@@ -12,6 +12,8 @@ export default class ESKitTheme {
   #themeId = "default-dark";
   #customVars = {};
   #wallpaper = "";
+  #blobUrl = null;
+  #resolvedWallpaper = "";
   #importedThemes = new Map(); // id -> ThemeMeta
   #styleEl = null;
   #mediaQuery = null;
@@ -38,6 +40,10 @@ export default class ESKitTheme {
 
   get wallpaper() {
     return this.#wallpaper || this.getTheme(this.#themeId)?.wallpaper || "";
+  }
+
+  get resolvedWallpaper() {
+    return this.#resolvedWallpaper || this.wallpaper;
   }
 
   get isDark() {
@@ -99,6 +105,7 @@ export default class ESKitTheme {
       }
     }
 
+    await this.#resolveWallpaper();
     this.#applyToDOM();
     this.#emitChange();
   }
@@ -164,7 +171,7 @@ export default class ESKitTheme {
    * プリセットまたはインポート済みテーマを適用する
    * @param {string} id
    */
-  apply(id) {
+  async apply(id) {
     const theme = this.getTheme(id);
     if (!theme) {
       console.warn(`[ESKitTheme] Theme "${id}" not found.`);
@@ -174,6 +181,7 @@ export default class ESKitTheme {
     if (theme.wallpaper && !this.#wallpaper) {
       // テーマ独自の壁紙があれば反映
     }
+    await this.#resolveWallpaper();
     this.#applyToDOM();
     this.#emitChange();
     this.save();
@@ -198,10 +206,11 @@ export default class ESKitTheme {
 
   /**
    * 壁紙を設定する
-   * @param {string} value CSS background 値 (linear-gradient(...), url(...), #hex)
+   * @param {string} value CSS background 値 (linear-gradient(...), url(...), #hex) または VFS パス (/home/...)
    */
-  setWallpaper(value) {
+  async setWallpaper(value) {
     this.#wallpaper = value;
+    await this.#resolveWallpaper();
     this.#applyToDOM();
     this.#emitChange();
     this.save();
@@ -309,7 +318,7 @@ export default class ESKitTheme {
     document.documentElement.classList.toggle("kit-light", !isDark);
 
     const activeVars = this.vars;
-    const wallpaperVal = this.wallpaper;
+    const wallpaperVal = this.#resolvedWallpaper || this.wallpaper;
 
     let cssRules = ":root {\n";
     for (const [k, v] of Object.entries(activeVars)) {
@@ -340,7 +349,63 @@ export default class ESKitTheme {
       dark: this.isDark,
       vars: this.vars,
       wallpaper: this.wallpaper,
+      resolvedWallpaper: this.resolvedWallpaper,
     });
+  }
+
+  #isVfsPath(val) {
+    if (!val || typeof val !== "string") return false;
+    const trimmed = val.trim();
+    return (
+      trimmed.startsWith("/") &&
+      !trimmed.startsWith("linear-gradient") &&
+      !trimmed.startsWith("radial-gradient") &&
+      !trimmed.startsWith("url(")
+    );
+  }
+
+  #getMimeType(filePath) {
+    const ext = filePath.includes(".") ? filePath.split(".").pop().toLowerCase() : "";
+    switch (ext) {
+      case "png": return "image/png";
+      case "jpg":
+      case "jpeg": return "image/jpeg";
+      case "webp": return "image/webp";
+      case "svg": return "image/svg+xml";
+      case "gif": return "image/gif";
+      case "bmp": return "image/bmp";
+      case "ico": return "image/x-icon";
+      default: return "image/png";
+    }
+  }
+
+  async #resolveWallpaper() {
+    const raw = this.#wallpaper || this.getTheme(this.#themeId)?.wallpaper || "";
+    if (this.#isVfsPath(raw) && window.System?.fs) {
+      try {
+        if (await window.System.fs.exists(raw)) {
+          const bytes = await window.System.fs.readFileAsBytes(raw);
+          const mime = this.#getMimeType(raw);
+          const blob = new Blob([bytes], { type: mime });
+          if (this.#blobUrl) {
+            URL.revokeObjectURL(this.#blobUrl);
+          }
+          this.#blobUrl = URL.createObjectURL(blob);
+          this.#resolvedWallpaper = `url("${this.#blobUrl}")`;
+          return;
+        } else {
+          console.warn(`[ESKitTheme] VFS wallpaper file not found: ${raw}, falling back to theme default.`);
+        }
+      } catch (err) {
+        console.warn(`[ESKitTheme] Failed to load wallpaper from VFS:`, err);
+      }
+    }
+
+    if (this.#blobUrl) {
+      URL.revokeObjectURL(this.#blobUrl);
+      this.#blobUrl = null;
+    }
+    this.#resolvedWallpaper = raw && !this.#isVfsPath(raw) ? raw : (this.getTheme(this.#themeId)?.wallpaper || "");
   }
 
   #validateThemeJson(json) {

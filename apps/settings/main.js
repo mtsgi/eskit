@@ -20,6 +20,7 @@ export default class SettingsApp extends ESKitApp {
     const currentMode = signal(window.System?.theme?.mode || "auto");
     const currentThemeId = signal(window.System?.theme?.current || "default-dark");
     const currentWallpaper = signal(window.System?.theme?.wallpaper || "");
+    const resolvedWallpaperBg = signal(window.System?.theme?.resolvedWallpaper || "");
     const currentLocale = signal(window.System?.i18n?.current || "ja");
     const importUrl = signal("");
     const processes = signal(window.System?.listProcesses() || []);
@@ -32,6 +33,7 @@ export default class SettingsApp extends ESKitApp {
       currentMode.value = data.mode;
       currentThemeId.value = data.id;
       currentWallpaper.value = data.wallpaper;
+      resolvedWallpaperBg.value = data.resolvedWallpaper || window.System?.theme?.resolvedWallpaper || "";
     });
 
     const offLocale = window.System?.events?.on("system:locale-changed", (data) => {
@@ -81,9 +83,31 @@ export default class SettingsApp extends ESKitApp {
       currentThemeId.value = id;
     };
 
+    const isCustomWallpaper = computed(() => {
+      const wp = currentWallpaper.value;
+      return Boolean(wp && wp.startsWith("/") && !wp.startsWith("linear-gradient") && !wp.startsWith("radial-gradient") && !wp.startsWith("url("));
+    });
+
+    const customWallpaperName = computed(() => {
+      const wp = currentWallpaper.value;
+      if (!wp) return "";
+      return wp.split("/").pop();
+    });
+
     const handleSetWallpaper = (val) => {
       window.System?.theme?.setWallpaper(val);
       currentWallpaper.value = val;
+      resolvedWallpaperBg.value = window.System?.theme?.resolvedWallpaper || "";
+    };
+
+    const handlePickWallpaper = async () => {
+      const pickedPath = await this.showOpenFilePicker({
+        title: this.t("settings.appearance.chooseWallpaperFile") || "壁紙画像を選択",
+        accepts: [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".bmp"],
+      });
+      if (pickedPath) {
+        handleSetWallpaper(pickedPath);
+      }
     };
 
     const handleSetLocale = async (lang) => {
@@ -358,6 +382,28 @@ export default class SettingsApp extends ESKitApp {
                     </div>
                   `;
                 })}
+
+                <div
+                  kit-if=${() => isCustomWallpaper.value}
+                  :class=${() => `wallpaper-card ${isCustomWallpaper.value ? "-active" : ""}`}
+                  :style=${() => `background-image: ${resolvedWallpaperBg.value}; background-size: cover; background-position: center;`}
+                  @click=${() => handleSetWallpaper(currentWallpaper.value)}
+                >
+                  <div class="wallpaper-label" :title=${() => customWallpaperName.value}>
+                    <span>${() => customWallpaperName.value || this.t("settings.appearance.customWallpaper")}</span>
+                  </div>
+                </div>
+
+                <div
+                  class="wallpaper-card -add"
+                  @click=${handlePickWallpaper}
+                  :title=${() => this.t("settings.appearance.pickWallpaper")}
+                >
+                  <div class="wallpaper-add-content">
+                    <eskit-icon set="lucide" name="plus" size="20"></eskit-icon>
+                    <span class="wallpaper-add-text">${() => this.t("settings.appearance.pickWallpaper")}</span>
+                  </div>
+                </div>
               </div>
             </div>
 

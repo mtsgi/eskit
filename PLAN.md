@@ -15,22 +15,26 @@
 - **権限モデル:** 2 段階 (Install-time 宣言 + Runtime ユーザー確認)
 - **ドキュメント:** 日本語で記述。API リファレンスは `API.md` に分離
 - **テスト/Lint:** オミット (ビルド不要コンセプト優先)
+- **エコシステム構成 (マルチリポジトリ):**
+  - `eskit`: コアフレームワーク & OS 環境 (PWA, Vanilla JS)
+  - `eskpt`: ESKit 専用パッケージレジストリサービス (Void.cloud / Vite)
+  - `eskit-docs`: 開発者ポータル & チュートリアル & プレイグラウンド (Blume / useblume.dev)
 
 ---
 
-## 現状 (Phase 1～5 実装済み)
+## 現状 (Phase 1～5 完了 / Phase 6 i18n 包括対応・最終完了中)
 
 | ファイル | 実装内容 |
 |----------|---------|
 | `system/util.js` | `css` / `html` タグ関数 (補間対応) |
 | `system/event-bus.js` | ESKitEventBus — pub/sub |
 | `system/filesystem.js` | ESKitFileSystem — IndexedDB VFS (Uint8Array, バイナリ対応) |
-| `system/manifest.js` | ESKitManifest — `define.json` を fetch・バリデーション |
+| `system/manifest.js` | ESKitManifest — `define.json` を fetch・バリデーション (fileAssociations 対応) |
 | `system/permissions.js` | ESKitPermissions — 2 段階権限管理 + ダイアログ |
-| `system/registry.js` | ESKitRegistry — アプリ登録・検索 |
+| `system/registry.js` | ESKitRegistry — アプリ登録・検索・URL インストール・拡張子関連付け検索 |
 | `system/shell-mode.js` | ESKitShellMode — desktop/mobile モード管理 |
-| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API (`this.fs`, `this.sendMessage`, `this.listProcesses`, `this.showNotification`, `this.t`) |
-| `system/system.js` | ESKitSystem — カーネル (boot, loadApp, IPC, notify, theme, i18n, dialog, notifications) |
+| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API (`this.fs`, `this.sendMessage`, `this.listProcesses`, `this.showNotification`, `this.t`, `this.onOpenFile`) |
+| `system/system.js` | ESKitSystem — カーネル (boot, loadApp, openFile, IPC, notify, theme, i18n, dialog, notifications) |
 | `system/window.js` | ESKitWindowSystem — モード対応ウィンドウ管理 |
 | `system/elements/desktop/` | `eskit-desktop` — デスクトップルート要素 |
 | `system/elements/window/` | `eskit-window` — アプリウィンドウ (desktop/mobile 対応) |
@@ -42,7 +46,7 @@
 | `system/elements/login-screen/` | `eskit-login-screen` — ログイン画面 (Phase 4) |
 | `apps/test/` | SystemVerifier — システム検証アプリ |
 | `apps/welcome/` | WelcomeApp — ようこそ画面 |
-| `apps/eskish/` | ESKish — 標準ターミナル環境 (Phase 4.5) |
+| `apps/eskish/` | ESKish — 標準ターミナル環境 (Phase 4.5 / 6) |
 | `README.md` | 日本語 README |
 | `API.md` | API リファレンス (README から分離) |
 | `system/kitstrap2.js` | Singleton CSSStyleSheet — kitstrap2 を Shadow DOM 全体に共有 |
@@ -58,8 +62,17 @@
 | `system/themes/presets.js` | 組み込みテーマ & 壁紙プリセット (Phase 5) |
 | `system/i18n.js` | ESKitI18n — 多言語辞書 & リアクティブ翻訳 (Phase 5) |
 | `system/elements/dialog/` | `eskit-dialog` — 汎用ダイアログ要素 (Phase 5) |
+| `system/elements/file-picker/` | `eskit-file-picker` — 汎用ファイル選択ダイアログ (Phase 5/6) |
 | `system/elements/notification/` | `eskit-notification` / `eskit-notification-container` — 通知トースト (Phase 5) |
 | `apps/settings/` | SettingsApp — システム設定アプリ (Phase 5) |
+| `manifest.webmanifest` | PWA Web App Manifest (Phase 6) |
+| `sw.js` | PWA Service Worker (Network-First, Phase 6) |
+| `system/pwa.js` | PWA ライフサイクル & アップデート通知 (Phase 6) |
+| `icons/icon.svg` | PWA ベクターアイコン (Phase 6) |
+| `apps/notepad/` | NotepadApp — テキストエディタ (Phase 6) |
+| `apps/calculator/` | CalculatorApp — 電卓 (Phase 6) |
+| `apps/clock/` | ClockApp — 時計/ストップウォッチ/タイマー (Phase 6) |
+| `apps/filemanager/` | FileManagerApp — 仮想 FS ブラウザ (Phase 6) |
 
 ### シェルモード (ESKitShellMode)
 
@@ -655,13 +668,20 @@ class ESKitI18n {
   t(key: string, vars?: Record<string, string>): string  // テンプレート補間対応
   get current(): string                    // 現在の言語コード
   get available(): string[]
-  extend(appId: string, lang: string, dict: Record<string, string>): void  // アプリ独自辞書
+  extend(appId: string, lang: string, dict: Record<string, string>): void  // アプリ独自辞書マージ
+  async loadAppDictionary(appDir: string, appId: string, i18nPath?: string): Promise<void>  // アプリ個別辞書の動的ロード
+  getAppName(manifest: Manifest): string   // 多相型マニフェスト名解決
+  getAppDescription(manifest: Manifest): string
+  getPermissionDescription(permCode: string): string
+  formatTime(dateOrTimestamp?: Date|number, options?: Intl.DateTimeFormatOptions): string
+  formatDate(dateOrTimestamp?: Date|number, options?: Intl.DateTimeFormatOptions): string
 }
 ```
-- 言語パック: `system/i18n/ja.json`, `system/i18n/en.json`
-- `navigator.language` で起動時自動選択 → `localStorage` でオーバーライド可
+- コア言語パック: `system/i18n/ja.json`, `system/i18n/en.json` (システム共通・OSメッセージ)
+- アプリ個別言語パック: 各アプリの `i18n/{lang}.json` から起動時および言語切替時に動的オンデマンド取得
+- `navigator.language` で起動時自動選択 → `localStorage` (`/home/{userId}/.config/i18n.json`) で永続化
 - **リアクティブ UI 更新:** `locale` を Hamon のシグナルとして実装し、Hamon テンプレート内の `${() => System.i18n.t('key')}` のように参照することで、言語切替時に依存関係の自動追跡により UI が即座に自動更新される。
-- 言語変更の完了時には `system:locale-changed` イベントも発行する。
+- 言語変更完了時には `system:locale-changed` イベントも発行する。
 
 ### `system/elements/notification/` (新規)
 
@@ -679,7 +699,7 @@ class ESKitI18n {
 **実装方針:** 新規の Hamon テンプレートエンジンを全面的に使用し、宣言的かつリアクティブに実装する。
 
 タブ構成:
-- **外観:** 組み込みテーマ選択グリッド・URL からテーマをインポート (`System.theme.load`)・壁紙グリッド (6 種)・現在のテーマを JSON でエクスポート
+- **外観:** 組み込みテーマ選択グリッド・URL からテーマをインポート (`System.theme.load`)・壁紙グリッド (プリセット + VFS 画像選択 + カスタム壁紙サムネイル)・現在のテーマを JSON でエクスポート
 - **言語:** `System.i18n.available` からドロップダウン選択
 - **システム:** 実行中プロセス数・登録アプリ数
 - **権限:** インストール済みアプリの権限一覧 + 個別取り消し UI
@@ -688,35 +708,142 @@ class ESKitI18n {
 
 ---
 
-## Phase 6: Developer Experience & Apps — 開発者体験とサンプルアプリ
+## Phase 6: PWA & Sample Apps & Base Extensibility — PWA化と拡張基盤 ✅
 
-**目的:** アプリ開発の実例を示し、外部アプリインストール機能を実装し、ドキュメントを整備する。  
-**完了条件:** ドキュメントだけ読んで新規アプリを作成・登録でき、外部 URL からアプリをインストールできる。
+**目的:** ESKit 本体を PWA 化してオフライン対応・アプリ化を実現し、外部アプリ/テーマのインストール基盤を完成させ、標準サンプルアプリ 4 種を整備し、全システムおよびアプリの完全な多言語対応 (i18n) 基盤を確立する。  
+**完了条件:**
+1. PWA としてブラウザにインストール可能でオフラインでも動作する。
+2. 外部 URL からのアプリ/テーマ登録 (`registerFromUrl`, `theme.load`) が動作し、確認ダイアログが多言語表示される。
+3. マニフェスト (`define.json`) が多相型多言語 (`string | { ja, en }`) および辞書パス宣言 (`i18n`) に対応している。
+4. 全サンプルアプリ（Notepad, Calculator, Clock, FileManager）が個別辞書 (`apps/*/i18n/`) を備え、ハードコード文字列なしで動作する。
+5. 言語切替時にウィンドウタイトル・タスクバー・アプリ内表示が即座に連動更新される。
+6. SystemVerifier (`apps/test`) に Phase 6 テストスイートが追加され、全自動検証が PASS する。  
+**ステータス:** 完了
+
+### PWA 化仕様
+- **キャッシュ戦略:** Network-First (フォールバックで Cache)
+  - オンライン時は常に最新リソースを直接取得（開発時の即時反映・キャッシュ事故防止）
+  - 通信不可時は Service Worker のキャッシュからレスポンス
+- **構成ファイル:**
+  - `manifest.webmanifest`: アプリ名、アイコン定義、`display: "standalone"`, `theme_color`, `background_color`
+  - `sw.js`: Service Worker (コアシステム、CSS、アイコン、組み込みアプリ、アプリ個別辞書の事前キャッシュ + 動的フェッチキャッシュ)
+  - `system/pwa.js`: Service Worker 登録 & 更新監視
+  - `icons/`: PWA 用マニフェストアイコン (192x192, 512x512, maskable)
+
+### マニフェスト (`define.json`) 多言語仕様
+- **多相型 (Polymorphic) プロパティ:**
+  - `name`: `string` または `{ "en": "...", "ja": "..." }`
+  - `description`: `string` または `{ "en": "...", "ja": "..." }`
+- **辞書パス宣言 (オプション):**
+  - `"i18n": "./i18n/"` (未指定時は `./i18n/` をデフォルト探索)
+
+### アプリ個別辞書 & 動的ローダー (`System.i18n.loadAppDictionary`)
+- 各アプリディレクトリ配下に `i18n/ja.json`, `i18n/en.json` を配置。
+- `System.loadApp()` 時に自動ロードし `System.i18n.extend()` にマージ。
+- 言語切替 (`System.i18n.setLocale()`) 時に登録済み・実行中アプリの該当言語辞書を遅延取得・自動マージし、UI を即座にリアクティブ更新。
+
+### `ESKitApp` ウィンドウタイトル自動同期
+- アプリが個別タイトル（編集中ファイル名など）を設定しない限り、`ESKitApp` 基底クラスがマニフェストの多言語名（`System.i18n.getAppName`）を自動追従。
+- `setTitle(title)` は文字列に加えて Signal や関数・i18n キーを受け入れ可能。
+- `app:opened` イベントに `manifest: app._manifest` を含め、タスクバー側でも言語切替時にアプリ表示名を同期更新。
 
 ### サンプルアプリ (新規 4 アプリ)
 
-| アプリ | 機能 | 利用 API | 宣言権限 |
-|--------|------|---------|---------|
-| `apps/notepad/` | テキストエディタ、仮想 FS へ保存/読込 | `this.fs.writeFile/readFile`, `this.showNotification` | `fs.read`, `fs.write`, `notifications` |
-| `apps/calculator/` | 四則演算電卓 | `this.querySelector` | (なし) |
-| `apps/clock/` | 時計 / ストップウォッチ / タイマー | `close()` で interval 解除、`this.showNotification` | `notifications` |
-| `apps/filemanager/` | 仮想 FS ブラウザ、ファイル作成・削除・リネーム | `this.fs.*` 全 API | `fs.read`, `fs.write` |
+| アプリ | 機能 | 利用 API | 宣言権限 | i18n 辞書 |
+|--------|------|---------|---------|----------|
+| `apps/notepad/` | テキストエディタ、仮想 FS へ保存/読込 | `this.fs.writeFile/readFile`, `this.showNotification` | `fs.read`, `fs.write`, `notifications` | `apps/notepad/i18n/{ja,en}.json` |
+| `apps/calculator/` | 四則演算電卓 (キーボード入力対応) | `this.querySelector` | (なし) | `apps/calculator/i18n/{ja,en}.json` |
+| `apps/clock/` | 時計 / ストップウォッチ / タイマー | `this.showNotification`, `System.i18n.formatDate/formatTime` | `notifications` | `apps/clock/i18n/{ja,en}.json` |
+| `apps/filemanager/` | 仮想 FS ブラウザ、ファイル作成・削除・リネーム・PC 入出力 | `this.fs.*` 全 API | `fs.read`, `fs.write`, `notifications` | `apps/filemanager/i18n/{ja,en}.json` |
 
-### 外部アプリインストール — `ESKitRegistry.registerFromUrl` 実装
+### システムメッセージ & 初期ファイル多言語化
+- `system/registry.js`: 外部 URL インストール確認ダイアログを `System.i18n.t()` 化。
+- `system/permissions.js`: 権限要求ダイアログのアプリアイコン・名前解決を多言語対応。
+- 初期ユーザーディレクトリ作成: `/home/{userId}/desktop/Welcome.txt` および `documents/GettingStarted.md` を日英併記 (Bilingual) で生成。
 
-**フロー:**
-1. `{url}/define.json` を fetch してマニフェスト取得・バリデーション
-2. Popover API でユーザー確認ダイアログ (アプリ名・バージョン・要求権限を提示)
-3. ユーザーが承認 → `registry.registerManual(id, manifest)` で登録
-4. エントリポイントを動的 `import()` でロード
-5. `localStorage` に登録情報を永続化 → 次回起動時に自動復元
+**関連ファイル:** `manifest.webmanifest`, `sw.js`, `icons/`, `system/manifest.js`, `system/i18n.js`, `system/app.js`, `system/system.js`, `system/permissions.js`, `system/registry.js`, `apps/notepad/`, `apps/calculator/`, `apps/clock/`, `apps/filemanager/`, `apps/test/`
 
-**セキュリティ:**
-- HTTPS URL のみ許可 (http:// は即拒否)
-- `permissions[]` に `network` がなければ外部 fetch 不可
-- インストール確認ダイアログで全権限を明示
+---
 
-**関連ファイル:** `apps/notepad/`, `apps/calculator/`, `apps/clock/`, `apps/filemanager/`, `system/registry.js` (registerFromUrl 実装)
+## Phase 7: eskpt Registry Service & Client Integration — パッケージマネージャー
+
+**目的:** Void.cloud (`https://void.cloud/`) を活用して ESKit 専用の分散型パッケージレジストリサービス「eskpt」を開発し、ESKit クライアント（ESKish / GUI Store / Web連携）と統合する。  
+**完了条件:** 開発者が外部ホスティングしたアプリ/テーマ/CLIを eskpt にインデックス登録でき、ESKish や GUI App Store から検索・1クリックインストールできる。
+
+### 設計方針・決定事項
+- **リポジトリ:** `eskpt` (独立リポジトリ, Void.cloud / Vite ベース)
+- **インデックス型レジストリ (分散ホスティング):**
+  - パッケージ実体（コード・画像・スタイル）は開発者自身の GitHub Pages / Cloudflare Pages / Vercel 等にホスト。
+  - eskpt サービスはパッケージのメタデータ（`define.json` / `theme.json`）、バージョン、カテゴリ、検証ステータス、URL をインデックス（Void DB/KV）として管理・検索APIを提供。
+  - ホスティングのストレージ負荷や著作権・バイナリ管理の負担を抑え、極めて軽量かつ堅牢なエコシステムを実現。
+- **パッケージ種別:**
+  1. `app`: ESKit アプリケーション
+  2. `theme`: ESKit テーマ
+  3. `cli`: ESKish 拡張コマンド
+- **ロード方式 (ハイブリッド):**
+  - 基本はホスティング URL を `registerFromUrl` で動的 `import()`
+  - PWA Service Worker によりキャッシュされ、オフラインでも起動可能
+
+### `eskpt` サービス仕様 (Void.cloud)
+- **API エンドポイント:**
+  - `GET /api/v1/packages`: パッケージ一覧・カテゴリ別フィルタ
+  - `GET /api/v1/packages/:id`: パッケージ詳細・最新バージョン・マニフェスト情報
+  - `GET /api/v1/search?q=...`: パッケージ名・キーワード・タグ検索
+  - `POST /api/v1/packages`: パッケージ登録・更新リクエスト (URL を送信 → サーバー側でマニフェスト取得・スキーマ検証・インデックス登録)
+- **Web UI (Void フロントエンド):**
+  - パッケージカタログ・検索画面
+  - パッケージ詳細ページ (README, スクリーンショット, 要求権限一覧, 「Install to ESKit」ボタン)
+  - パッケージ登録フォーム
+
+### ESKit クライアント統合
+1. **ESKish 組み込みコマンド `eskpt`:**
+   - `eskpt search <query>`: レジストリを検索
+   - `eskpt info <pkgId>`: パッケージ詳細・権限・URL 表示
+   - `eskpt install <pkgId|url>`: レジストリから URL を解決して `registerFromUrl` を実行
+   - `eskpt uninstall <pkgId>`: インストール済みパッケージを解除
+   - `eskpt list`: インストール済みパッケージ一覧
+   - `eskpt update [pkgId]`: パッケージの更新チェック・再読み込み
+2. **GUI パッケージマネージャーアプリ (`apps/store/`):**
+   - Hamon テンプレートで構築された「App Store」風 GUI アプリ
+   - おすすめ、カテゴリ別一覧 (アプリ / テーマ / ツール)、検索バー
+   - パッケージカード、詳細モーダル、1クリック「インストール」「開く」「アンインストール」ボタン
+3. **URL プロトコル・インストール連携:**
+   - Web リンクからのインストール受付: `https://eskit.local/?install=<url>` パラメータにより、開いた瞬間にインストール確認ダイアログを自動ポップアップ。
+
+**関連ファイル (ESKit 側):** `apps/eskish/` (eskpt コマンド追加), `apps/store/` (新規 GUI アプリ), `system/system.js` (起動時 install パラメータハンドリング)
+
+---
+
+## Phase 8: Blume Developer Portal & Live Playground — 開発者ポータル
+
+**目的:** Blume (`https://useblume.dev/`) を用いて、ドキュメント・チュートリアル・コンポーネントカタログ・Live Playground・eskpt ショーケースを統合した総合開発者ポータルを構築する。  
+**完了条件:** ブラウザ上で ESKit / Hamon アプリをライブ編集・検証できる Playground、および AI 向け `llms.txt`、API リファレンスが完備されたポータルが公開される。
+
+### 設計方針・決定事項
+- **リポジトリ:** `eskit-docs` (独立リポジトリ, Blume / Astro + Vite ベース)
+- **対象読者:** ESKit を使ってアプリ・テーマを開発したいエンジニア & AI コーディングエージェント
+
+### ポータル構成コンテンツ
+1. **開発者ガイド & チュートリアル:**
+   - **入門:** ESKit のコンセプト（ビルド不要・ブラウザネイティブ ESM）、クイックスタート
+   - **アプリ開発ガイド:** `ESKitApp` ライフサイクル、マニフェスト (`define.json`) 設計、権限モデル
+   - **Hamon ガイド:** シグナル (`signal`, `computed`, `effect`)、タグ付きテンプレート (`hamon` タグ)、ディレクティブ (`kit-if`, `list`)、イベント/プロパティバインディング
+   - **テーマ・外観ガイド:** kitstrap2 CSS 変数、`theme.json` 作成、Lucide アイコンの利用
+   - **配布・公開ガイド:** GitHub Pages へのデプロイと `eskpt` への登録手順
+2. **API リファレンス:**
+   - コア API (`System.*`, `this.fs.*`, `this.sendMessage`, `this.showNotification` 等) の完全リファレンス
+   - Web Components 仕様 (`<eskit-icon>`, `<eskit-dialog>`, `<eskit-window>` 等)
+3. **コンポーネントギャラリー (kitstrap2 & Elements):**
+   - kitstrap2 のボタンスタイル、フォーム、カード、ダイアログ等のインタラクティブなプレビュー
+4. **Live Playground / サンドボックス:**
+   - Blume の Astro Islands / iframe 連携を利用し、ブラウザ内で ESKit またはスタンドアロンの Hamon 実行環境を埋め込み
+   - 左側にコードエディタ、右側にリアルタイム描画プレビューを配置し、インストール不要でアプリ開発を試作可能に
+5. **AI アシスタント & エージェント最適化:**
+   - Blume 標準の `llms.txt` / `llms-full.txt` を整備し、Cursor / Gemini / Claude 等の AI エージェントが ESKit アプリコードを一発生成できるようにプロンプト・API 仕様を凝縮配信
+   - Blume の「Ask AI」アシスタント有効化
+6. **eskpt ショーケース & 1クリックインストール連携:**
+   - eskpt レジストリの人気アプリ・テーマをポータル上で紹介
+   - 「Install to ESKit」ボタンで、ユーザーの起動中 ESKit インスタンスにダイレクト連携
 
 ---
 
@@ -753,11 +880,14 @@ class ESKitI18n {
 
 ---
 
-## ディレクトリ構成 (完成形)
+## ディレクトリ構成 (完成形 - eskit 本体リポジトリ)
 
 ```
 index.html
 main.js
+manifest.webmanifest     (Phase 6 - PWA)
+sw.js                    (Phase 6 - PWA Service Worker)
+icons/                   (Phase 6 - PWA アイコン)
 README.md
 API.md
 PLAN.md
@@ -773,19 +903,19 @@ system/
   app.js
   system.js
   window.js
-  kitstrap2.js          (実装済み)
-  kitstrap2.css         (実装済み)
-  hamon.js              (Phase 3.5)
-  users.js              (Phase 4)
-  icons.js              (Phase 4.8)
-  theme.js              (Phase 5)
-  themes/               (Phase 5)
+  kitstrap2.js
+  kitstrap2.css
+  hamon.js
+  users.js
+  icons.js
+  theme.js
+  themes/
     light.json
     dark.json
-  i18n.js               (Phase 5)
+  i18n.js
   i18n/
-    ja.json             (Phase 5)
-    en.json             (Phase 5)
+    ja.json
+    en.json
   elements/
     desktop/
     window/
@@ -793,20 +923,22 @@ system/
     drawer/
     home-bar/
     permission-dialog/
-    taskbar/            (実装済み)
-    context-menu/       (Phase 3)
-    beacon/             (Phase 3)
-    quick-settings/     (Phase 3)
-    login-screen/       (Phase 4)
-    icon/               (Phase 4.8)
-    notification/       (Phase 5)
+    taskbar/
+    context-menu/
+    beacon/
+    quick-settings/
+    login-screen/
+    icon/
+    notification/
+    dialog/
 apps/
-  test/
-  welcome/
-  eskish/               (Phase 4.5)
-  settings/             (Phase 5)
-  notepad/              (Phase 6)
-  calculator/           (Phase 6)
-  clock/                (Phase 6)
-  filemanager/          (Phase 6)
+  test/                 (SystemVerifier 自動検証スイート)
+  welcome/              (ようこそ画面 + i18n/)
+  eskish/               (標準ターミナル環境 + i18n/ / Phase 7 で eskpt コマンド統合)
+  settings/             (システム設定 + i18n/)
+  notepad/              (テキストエディタ + i18n/)
+  calculator/           (電卓 + i18n/)
+  clock/                (時計/ストップウォッチ/タイマー + i18n/)
+  filemanager/          (仮想 FS ブラウザ + i18n/)
+  store/                (Phase 7 - eskpt GUI App Store)
 ```

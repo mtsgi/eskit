@@ -11,6 +11,29 @@ export default class ESKishApp extends ESKitApp {
   /** @type {CSSStyleSheet} アプリ共通スタイル */
   static style = style;
 
+  /** @type {Map<string, Function>} 外部拡張コマンドレジストリ */
+  static #customCommands = new Map();
+
+  /**
+   * 外部からカスタムコマンドを登録する。
+   * @param {string} name コマンド名
+   * @param {Function} handler ({ System, app, fs, args }) => Promise<string|null>
+   */
+  static registerCommand(name, handler) {
+    if (typeof name === "string" && typeof handler === "function") {
+      ESKishApp.#customCommands.set(name, handler);
+    }
+  }
+
+  /**
+   * インスタンスからカスタムコマンドを登録する。
+   * @param {string} name
+   * @param {Function} handler
+   */
+  registerCommand(name, handler) {
+    ESKishApp.registerCommand(name, handler);
+  }
+
   /** @type {string} 現在の作業ディレクトリ (CWD) */
   #cwd = "/home";
 
@@ -532,8 +555,59 @@ export default class ESKishApp extends ESKitApp {
         ].join("\n");
       }
 
-      default:
+      // ─── パッケージ / ファイル連携 ─────────────────────────────────────────
+      case "openFile": {
+        if (!args[0]) throw new Error("Usage: openFile <path>");
+        const path = this.#resolvePath(args[0]);
+        const uuid = await System.openFile(path);
+        return uuid ? `Opened ${path} (UUID: ${uuid.slice(0, 8)})` : `Opened ${path}`;
+      }
+
+      case "installApp": {
+        if (!args[0]) throw new Error("Usage: installApp <url>");
+        const manifest = await System.registry.registerFromUrl(args[0]);
+        return `Successfully installed app "${manifest.name}" (${manifest.id})`;
+      }
+
+      case "uninstallApp": {
+        if (!args[0]) throw new Error("Usage: uninstallApp <id>");
+        await System.registry.uninstall(args[0]);
+        return `Uninstalled app "${args[0]}"`;
+      }
+
+      default: {
+        // 1. 動的登録コマンドを確認
+        if (ESKishApp.#customCommands.has(cmd)) {
+          const handler = ESKishApp.#customCommands.get(cmd);
+          return await handler.call(this, { System, app: this, fs: this.fs, args });
+        }
+
+        // 2. $PATH (/home/{userId}/bin, /system/bin) スクリプトの探索
+        const user = System?.currentUser?.id;
+        const searchDirs = [];
+        if (user) searchDirs.push(`/home/${user}/bin`);
+        searchDirs.push("/system/bin");
+
+        for (const dir of searchDirs) {
+          const scriptPath = `${dir}/${cmd}.js`;
+          if (await this.fs.exists(scriptPath)) {
+            const content = await this.fs.readFile(scriptPath);
+            const blob = new Blob([content], { type: "text/javascript" });
+            const blobUrl = URL.createObjectURL(blob);
+            try {
+              const mod = await import(blobUrl);
+              const fn = typeof mod === "function" ? mod : (mod.default || mod[cmd]);
+              if (typeof fn === "function") {
+                return await fn.call(this, { System, app: this, fs: this.fs, args });
+              }
+            } finally {
+              URL.revokeObjectURL(blobUrl);
+            }
+          }
+        }
+
         throw new Error(this.t("terminal.cmdNotFound", { cmd }));
+      }
     }
   }
 

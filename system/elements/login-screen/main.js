@@ -1,7 +1,7 @@
 import style from "./style.js";
 import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
-import { HamonScope } from "system/hamon.js";
+import { signal, computed, HamonScope } from "system/hamon.js";
 
 /**
  * ESKitLoginScreenElement — ログイン画面
@@ -9,8 +9,9 @@ import { HamonScope } from "system/hamon.js";
 export default class ESKitLoginScreenElement extends HTMLElement {
   #resolve = null;
   #scope = null;
-  #offLocale = null;
   #currentUsers = [];
+  #errorMessage = signal("");
+  #isFirstAdmin = signal(false);
 
   constructor() {
     super();
@@ -21,38 +22,68 @@ export default class ESKitLoginScreenElement extends HTMLElement {
   connectedCallback() {
     this.#render();
     this.#adoptStyle();
-    this.#bindEvents();
   }
 
   disconnectedCallback() {
-    this.#offLocale?.();
     this.#scope?.dispose();
+  }
+
+  get subtitle() {
+    return computed(() => {
+      const i18n = window.System?.i18n;
+      if (!i18n) return "サインインしてセッションを開始してください";
+      return i18n.t(this.#isFirstAdmin.value ? "login.subtitleFirstAdmin" : "login.subtitleLogin");
+    });
+  }
+
+  get submitLabel() {
+    return computed(() => {
+      const i18n = window.System?.i18n;
+      if (!i18n) return "ログイン";
+      return i18n.t(this.#isFirstAdmin.value ? "login.createAdminButton" : "login.loginButton");
+    });
+  }
+
+  get errorMessage() {
+    return this.#errorMessage;
+  }
+
+  toggleLanguage() {
+    const i18n = window.System?.i18n;
+    if (!i18n) return;
+    const next = i18n.locale.value === "ja" ? "en" : "ja";
+    i18n.setLocale(next);
+  }
+
+  handleSubmit(e) {
+    if (e) e.preventDefault();
+    if (!this.#resolve) return;
+    this.#onLoginSubmit();
   }
 
   requestLogin(users, errorMessage = "") {
     this.setAttribute("open", "");
     this.#currentUsers = users || [];
-
-    const subText = window.System?.i18n?.t("login.subtitleLogin") || "サインインしてセッションを開始してください";
-    const btnText = window.System?.i18n?.t("login.loginButton") || "ログイン";
-
-    this.#setSubtitle(subText);
-    this.#setSubmitLabel(btnText);
-    this.#setError(errorMessage);
+    this.#isFirstAdmin.value = this.#currentUsers.length === 0;
+    this.#errorMessage.value = errorMessage || "";
 
     const selectEl = this.shadowRoot.getElementById("login-user-id");
     const pwEl = this.shadowRoot.getElementById("password");
 
-    selectEl.innerHTML = "";
-    for (const user of users) {
-      const option = document.createElement("option");
-      option.value = user.id;
-      option.textContent = `${user.name} (${user.id})${user.isAdmin ? " [admin]" : ""}`;
-      selectEl.appendChild(option);
+    if (selectEl) {
+      selectEl.innerHTML = "";
+      for (const user of this.#currentUsers) {
+        const option = document.createElement("option");
+        option.value = user.id;
+        option.textContent = `${user.name} (${user.id})${user.isAdmin ? " [admin]" : ""}`;
+        selectEl.appendChild(option);
+      }
+      selectEl.focus();
     }
 
-    pwEl.value = "";
-    selectEl.focus();
+    if (pwEl) {
+      pwEl.value = "";
+    }
 
     return new Promise((resolve) => {
       this.#resolve = resolve;
@@ -60,61 +91,29 @@ export default class ESKitLoginScreenElement extends HTMLElement {
   }
 
   setError(message) {
-    this.#setError(message);
+    this.#errorMessage.value = message || "";
   }
 
   hide() {
     this.removeAttribute("open");
+    this.#errorMessage.value = "";
   }
 
   // ─── 内部 ──────────────────────────────────────────────────────────────
 
-  #bindEvents() {
-    const formEl = this.shadowRoot.getElementById("form");
-    formEl.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (!this.#resolve) return;
-      this.#onLoginSubmit();
-    });
-
-    this.#offLocale = window.System?.events?.on("system:locale-changed", () => {
-      if (this.hasAttribute("open")) {
-        const subText = window.System?.i18n?.t("login.subtitleLogin") || "サインインしてセッションを開始してください";
-        const btnText = window.System?.i18n?.t("login.loginButton") || "ログイン";
-        this.#setSubtitle(subText);
-        this.#setSubmitLabel(btnText);
-      }
-    });
-  }
-
   #onLoginSubmit() {
-    const id = this.shadowRoot.getElementById("login-user-id").value;
-    const password = this.shadowRoot.getElementById("password").value;
+    const selectEl = this.shadowRoot.getElementById("login-user-id");
+    const id = selectEl ? selectEl.value : "";
+    const pwEl = this.shadowRoot.getElementById("password");
+    const password = pwEl ? pwEl.value : "";
 
-    if (!id) {
-      this.#setError(window.System?.i18n?.t("login.errUserNotFound") || "ユーザーを選択してください");
+    if (!id && this.#currentUsers.length > 0) {
+      this.#errorMessage.value = window.System?.i18n?.t("login.errUserNotFound") || "ユーザーを選択してください";
       return;
     }
 
-    this.#setError("");
+    this.#errorMessage.value = "";
     this.#finish({ id, password });
-  }
-
-  #setSubtitle(text) {
-    const el = this.shadowRoot.getElementById("subtitle");
-    if (el) el.textContent = text;
-  }
-
-  #setSubmitLabel(text) {
-    const el = this.shadowRoot.getElementById("submit");
-    if (el) {
-      el.innerHTML = `<span class="kit-flex kit-flex-middle kit-gap-xs"><span>${text}</span><eskit-icon set="lucide" name="arrow-right" size="14"></eskit-icon></span>`;
-    }
-  }
-
-  #setError(message) {
-    const el = this.shadowRoot.getElementById("error");
-    if (el) el.textContent = message;
   }
 
   #finish(payload) {
@@ -126,7 +125,7 @@ export default class ESKitLoginScreenElement extends HTMLElement {
   }
 
   #render() {
-    const frag = createTemplate(this.#scope);
+    const frag = createTemplate(this);
     this.shadowRoot.replaceChildren(frag);
   }
 

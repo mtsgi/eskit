@@ -8,10 +8,13 @@ import ESKitUsers       from "./users.js";
 import ESKitIcons       from "./icons.js";
 import ESKitTheme       from "./theme.js";
 import ESKitI18n        from "./i18n.js";
+import ESKitManifest    from "./manifest.js";
 import ESKitLoginScreenElement from "./elements/login-screen/main.js";
 import ESKitIconElement        from "./elements/icon/main.js";
 import ESKitDialogElement      from "./elements/dialog/main.js";
+import ESKitFilePickerElement  from "./elements/file-picker/main.js";
 import ESKitNotificationContainerElement, { ESKitNotificationElement } from "./elements/notification/main.js";
+import { initPWA }             from "./pwa.js";
 
 if (!customElements.get("eskit-icon")) {
   customElements.define("eskit-icon", ESKitIconElement);
@@ -23,6 +26,10 @@ if (!customElements.get("eskit-login-screen")) {
 
 if (!customElements.get("eskit-dialog")) {
   customElements.define("eskit-dialog", ESKitDialogElement);
+}
+
+if (!customElements.get("eskit-file-picker")) {
+  customElements.define("eskit-file-picker", ESKitFilePickerElement);
 }
 
 if (!customElements.get("eskit-notification")) {
@@ -89,6 +96,7 @@ export default class ESKitSystem {
   #readyPromise;
   #loginScreen           = null;
   #dialogElement         = null;
+  #filePickerElement     = null;
   #notificationContainer = null;
 
   events        = new ESKitEventBus();
@@ -100,6 +108,7 @@ export default class ESKitSystem {
   icons         = new ESKitIcons();
   theme         = new ESKitTheme();
   i18n          = new ESKitI18n();
+  manifest      = ESKitManifest;
   notifications = new ESKitNotificationsStore();
 
   constructor() {
@@ -128,6 +137,8 @@ export default class ESKitSystem {
     await this.fs.init();
     await this.users.init();
     await this.#initBaseDirs();
+    await this.theme.init();
+    await this.i18n.init();
     await this.#ensureDefaultAdmin();
     const user = await this.#ensureLogin();
     await this.#initCurrentUserDirs(user.id);
@@ -135,12 +146,14 @@ export default class ESKitSystem {
     await this.i18n.init();
     this.WindowSystem = new ESKitWindowSystem();
     await this.#registerBuiltinApps();
+    await this.registry.loadInstalledApps();
     this.initUI();
+    initPWA().catch(() => {});
     this.events.emit("system:ready", { user });
   }
 
   async #initBaseDirs() {
-    const dirs = ["/home", "/shared", "/system", "/apps"];
+    const dirs = ["/home", "/shared", "/system", "/apps", "/system/bin"];
     for (const dir of dirs) {
       await this.fs.mkdir(dir, { recursive: true });
     }
@@ -151,10 +164,66 @@ export default class ESKitSystem {
       `/home/${userId}`,
       `/home/${userId}/desktop`,
       `/home/${userId}/documents`,
+      `/home/${userId}/bin`,
       `/home/${userId}/.config`,
     ];
     for (const dir of dirs) {
       await this.fs.mkdir(dir, { recursive: true });
+    }
+
+    // 初回サンプルファイルの自動配置
+    try {
+      const welcomePath = `/home/${userId}/desktop/Welcome.txt`;
+      if (!(await this.fs.exists(welcomePath))) {
+        const welcomeContent = [
+          "Welcome to ESKit!",
+          "ESKit is a web desktop OS built with Vanilla JavaScript, Web Components, and the Hamon reactive engine.",
+          "Feel free to explore built-in apps such as FileManager, Notepad, Calculator, Clock, and ESKish.",
+          "",
+          "---",
+          "",
+          "ようこそ ESKit へ！",
+          "ESKit は Vanilla JavaScript と Web Components、Hamon リアクティブエンジンで構築された Web デスクトップ OS です。",
+          "ファイルマネージャー (FileManager) やテキストエディタ (Notepad)、電卓、時計、ターミナル (ESKish) などのアプリを自由にお試しください。",
+          "",
+        ].join("\n");
+        await this.fs.writeFile(welcomePath, welcomeContent);
+      }
+
+      const readmePath = `/home/${userId}/documents/GettingStarted.md`;
+      if (!(await this.fs.exists(readmePath))) {
+        const gettingStartedContent = [
+          "# Getting Started / はじめに",
+          "",
+          "Welcome to ESKit Phase 6.",
+          "",
+          "## Key Features (主な機能)",
+          "- **Notepad**: Text and Markdown editor with virtual filesystem save/load support.",
+          "  (テキスト・Markdown・設定ファイルの閲覧・編集・保存)",
+          "- **FileManager**: Browse virtual directories, create folders, and import/export files with PC.",
+          "  (仮想ファイルシステムの閲覧、フォルダ作成、PC とのファイル送受信)",
+          "- **Calculator**: Standard arithmetic calculator with keyboard input support.",
+          "  (四則演算電卓・キーボード入力対応)",
+          "- **Clock**: Analog/digital clock, stopwatch with lap tracking, and timer with alarm.",
+          "  (アナログ/デジタル時計、ラップ機能付きストップウォッチ、タイマー)",
+          "- **ESKish**: Terminal environment with EcmaScript-style commands.",
+          "  (標準ターミナル環境)",
+          "- **PWA & Offline**: Installable as a standalone app, works offline with Service Worker.",
+          "  (PWA インストール対応・オフライン動作)",
+          "",
+        ].join("\n");
+        await this.fs.writeFile(readmePath, gettingStartedContent);
+      }
+
+      const sampleCliPath = `/home/${userId}/bin/hello.js`;
+      if (!(await this.fs.exists(sampleCliPath))) {
+        await this.fs.writeFile(
+          sampleCliPath,
+          "export default async function({ System, app, fs, args }) {\n  const user = System.currentUser?.name || 'World';\n  return `Hello, ${user}! (args: ${args.length > 0 ? args.join(', ') : 'none'})`;\n}\n"
+        );
+      }
+    } catch (e) {
+      console.warn("[ESKitSystem] Failed to initialize sample user files:", e);
     }
   }
 
@@ -191,6 +260,8 @@ export default class ESKitSystem {
       try {
         const user = await this.users.login(creds.id, creds.password);
         loginScreen.hide();
+        await this.#initCurrentUserDirs(user.id);
+        await this.registry.loadInstalledApps();
         this.events.emit("user:logged-in", { user });
         return user;
       } catch (e) {
@@ -213,6 +284,22 @@ export default class ESKitSystem {
     return this.#dialogElement;
   }
 
+  #getFilePickerElement() {
+    if (this.#filePickerElement) return this.#filePickerElement;
+    this.#filePickerElement = document.createElement("eskit-file-picker");
+    document.body.appendChild(this.#filePickerElement);
+    return this.#filePickerElement;
+  }
+
+  /**
+   * 汎用ファイル選択ダイアログを表示する。
+   * @param {{ title?: string, startPath?: string, accepts?: string[] }} [opts]
+   * @returns {Promise<string|null>}
+   */
+  showOpenFilePicker(opts) {
+    return this.#getFilePickerElement().show(opts);
+  }
+
   #getNotificationContainer() {
     if (this.#notificationContainer) return this.#notificationContainer;
     this.#notificationContainer = document.createElement("eskit-notification-container");
@@ -221,7 +308,16 @@ export default class ESKitSystem {
   }
 
   async #registerBuiltinApps() {
-    const builtin = ["apps/test/", "apps/welcome/", "apps/eskish/", "apps/settings/"];
+    const builtin = [
+      "apps/test/",
+      "apps/welcome/",
+      "apps/eskish/",
+      "apps/settings/",
+      "apps/notepad/",
+      "apps/calculator/",
+      "apps/clock/",
+      "apps/filemanager/",
+    ];
     for (const dir of builtin) {
       try {
         await this.registry.register(dir);
@@ -307,9 +403,10 @@ export default class ESKitSystem {
   /**
    * アプリを起動する。
    * @param {string} appDir  末尾スラッシュ付きのディレクトリ (例: "apps/myapp/")
+   * @param {object} [options={}]  起動オプション ({ filePath, ... })
    * @returns {Promise<string>}  UUID
    */
-  async loadApp(appDir) {
+  async loadApp(appDir, options = {}) {
     await this.#readyPromise;
 
     if (!this.currentUser) {
@@ -323,15 +420,21 @@ export default class ESKitSystem {
       manifest = await this.registry.register(dir);
     }
 
+    // アプリ固有言語辞書をロード
+    if (this.i18n?.loadAppDictionary) {
+      await this.i18n.loadAppDictionary(dir, manifest.id, manifest.i18n);
+    }
+
     const uuid = this.generateUUID();
 
     const module   = await import(dir + manifest.entry);
     const AppClass = module.default;
     const app      = new AppClass();
 
-    app._uuid     = uuid;
-    app._manifest = manifest;
-    app._state    = "running";
+    app._uuid      = uuid;
+    app._manifest  = manifest;
+    app._state     = "running";
+    app.launchData = options;
 
     this.#process.set(uuid, app);
     this.permissions.registerApp(uuid, manifest);
@@ -339,10 +442,53 @@ export default class ESKitSystem {
     const windowElement = this.WindowSystem.open(uuid);
     app._windowElement  = windowElement;
 
+    // 自動タイトル同期を初期化
+    app._initTitleSync?.();
+
     app.initialize();
-    this.events.emit("app:opened", { uuid, name: app.name, icon: app._manifest?.icon ?? null });
+    if (options.filePath && typeof app.onOpenFile === "function") {
+      try {
+        app.onOpenFile(options.filePath);
+      } catch (e) {
+        console.warn(`[ESKitSystem] Error during onOpenFile for app ${uuid}:`, e);
+      }
+    }
+
+    this.events.emit("app:opened", { uuid, name: app.name, icon: app._manifest?.icon ?? null, manifest: app._manifest });
 
     return uuid;
+  }
+
+  /**
+   * ファイルパスから関連付けられたアプリを特定して起動する。
+   * @param {string} filePath VFS 内の絶対パス (例: "/home/admin/desktop/Welcome.txt")
+   * @returns {Promise<string>} 起動したアプリの UUID
+   */
+  async openFile(filePath) {
+    if (!filePath || typeof filePath !== "string") {
+      throw new Error("Invalid file path");
+    }
+
+    const ext = filePath.includes(".") ? "." + filePath.split(".").pop().toLowerCase() : "";
+    const app = this.registry.findAppByExtension(ext);
+
+    if (app?._dir) {
+      return this.loadApp(app._dir, { filePath });
+    }
+
+    // 拡張子未登録の場合のフォールバック (テキスト系ファイルなら Notepad で開く)
+    const textExts = [".txt", ".md", ".json", ".js", ".css", ".html", ".csv", ".log", ".xml", ".yaml", ".yml", ""];
+    if (textExts.includes(ext)) {
+      return this.loadApp("apps/notepad/", { filePath });
+    }
+
+    const msg = this.i18n.t("system.noAppForFile", { ext: ext || "(none)" }) || `拡張子 "${ext}" を開くことができるアプリが見つかりません。`;
+    await this.dialog.alert({
+      title: this.i18n.t("system.openFileError") || "ファイルを開けません",
+      message: msg,
+      icon: "alert-circle",
+    });
+    return null;
   }
 
   /**

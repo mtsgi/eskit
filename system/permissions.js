@@ -254,7 +254,7 @@ export default class ESKitPermissions {
    */
   #requestPermission(uuid, permission) {
     const manifest = this.#appManifests.get(uuid);
-    const appName  = manifest?.name ?? uuid;
+    const appName  = manifest ? (window.System?.i18n?.getAppName(manifest) || (typeof manifest.name === "string" ? manifest.name : manifest.id)) : uuid;
 
     // シングルトンダイアログの遅延生成
     if (!ESKitPermissions.#dialogElement) {

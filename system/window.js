@@ -110,11 +110,21 @@ export default class ESKitWindowSystem {
 
     // カスケード配置 (desktop モード)
     if (!this.system.shellMode.isMobile) {
-      const offset = 30 + 28 * (this.#cascadeIndex % 10);
-      appElement.style.left   = `${offset}px`;
-      appElement.style.top    = `${offset}px`;
-      appElement.style.width  = "640px";
-      appElement.style.height = "480px";
+      const maxW = Math.max(300, (window.innerWidth || 800) - 16);
+      const maxH = Math.max(220, (window.innerHeight || 600) - 64);
+      const w = Math.min(640, maxW);
+      const h = Math.min(480, maxH);
+
+      const maxOffsetLeft = Math.max(8, (window.innerWidth || 800) - w - 8);
+      const maxOffsetTop = Math.max(8, (window.innerHeight || 600) - h - 56);
+      const offset = 16 + 24 * (this.#cascadeIndex % 6);
+      const left = Math.min(maxOffsetLeft, offset);
+      const top = Math.min(maxOffsetTop, offset);
+
+      appElement.style.left   = `${left}px`;
+      appElement.style.top    = `${top}px`;
+      appElement.style.width  = `${w}px`;
+      appElement.style.height = `${h}px`;
       this.#cascadeIndex++;
     }
 

@@ -889,7 +889,7 @@ System.theme.wallpaper;   // 現在の壁紙 CSS 値
 System.theme.setMode("dark");                  // カラーモードを変更 ("light" | "dark" | "auto")
 System.theme.apply("nord");                    // プリセットテーマを適用
 System.theme.applyVars({ "--kit-color-primary": "#e63946" }); // カスタム CSS 変数を直接適用
-System.theme.setWallpaper("radial-gradient(...)"); // 壁紙を変更
+await System.theme.setWallpaper("/home/admin/Pictures/my-wall.png"); // VFS パスまたは CSS 値で壁紙を変更 (Blob URL 自動生成)
 await System.theme.load("https://example.com/theme.json"); // 外部 URL からテーマを fetch・インポート
 System.theme.reset();                          // デフォルトテーマにリセット
 const jsonStr = System.theme.export();         // 現在のテーマ設定を JSON 出力
@@ -970,6 +970,16 @@ const buttonId = await System.dialog.custom({
     { id: "save", label: "保存", primary: true },
   ],
 });
+
+// 5. 汎用ファイル選択ダイアログ (File Picker)
+const filePath = await System.dialog.showOpenFilePicker({
+  title: "画像を選択",
+  startPath: "/home/admin/Pictures",
+  accepts: [".png", ".jpg", ".jpeg", ".webp", ".svg"],
+});
+if (filePath) {
+  console.log("Selected file:", filePath);
+}
 ```
 
 ---
@@ -997,5 +1007,120 @@ System.notifications.clear();        // 履歴をすべて消去
 3. **通知 (Notifications):** 通知履歴（Notification Center）の閲覧・消去、テスト通知送信
 4. **システム (System):** OS バージョン・ユーザー・シェルモード等のシステムサマリ、実行中プロセス一覧と強制終了
 5. **権限 (Permissions):** 実行中アプリの要求権限一覧の確認と個別取り消し
+
+---
+
+## `ファイル関連付け & 起動引数` (Phase 6)
+
+### `System.openFile(filePath)`
+ファイルパスの拡張子から対応するアプリを自動検出し、ファイルパスを渡して起動します。
+
+```js
+await System.openFile("/home/alice/desktop/Welcome.txt"); // Notepad が起動してファイルが開く
+```
+
+### `define.json` での拡張子宣言
+```json
+{
+  "id": "eskit.notepad",
+  "name": "Notepad",
+  "entry": "main.js",
+  "fileAssociations": [".txt", ".md", ".json", ".js", ".css", ".html"]
+}
+```
+
+### アプリ側でのファイルオープン受信
+```js
+export default class NotepadApp extends ESKitApp {
+  initialize() {
+    // 起動オプション（launchData）の確認
+    if (this.launchData?.filePath) {
+      this.onOpenFile(this.launchData.filePath);
+    }
+  }
+
+  // 関連付け・オープン用ライフサイクルフック
+  async onOpenFile(filePath) {
+    const text = await this.fs.readFile(filePath);
+    // ファイル内容の読み込みと表示
+  }
+}
+```
+
+---
+
+## `PWA & Service Worker` (Phase 6)
+
+ESKit は PWA (Progressive Web Apps) として設計されており、ブラウザへのインストールとオフライン実行に対応しています。
+
+- **`manifest.webmanifest`**: 相対 `start_url: "./index.html"` および `scope: "./"` を指定し、ルートおよびサブディレクトリ（GitHub Pages 等）への配置に対応。
+- **`sw.js`**: **Network-First** 戦略を採用。オンライン時は常に最新コードを即時反映し、オフライン・通信障害時はキャッシュからレスポンス。
+- **`system/pwa.js`**: Service Worker の更新を監視し、新規バージョン検知時にユーザーへ再読み込み通知トーストを表示。
+
+---
+
+## `標準サンプルアプリ` (Phase 6)
+
+| アプリ | ディレクトリ | 説明 | 主な機能 |
+|--------|------------|------|---------|
+| **Notepad** | `apps/notepad/` | テキスト/コードエディタ | VFS 読込・保存・別名保存・PCダウンロード・行/文字数カウント・変更検知・Ctrl+S 保存・拡張子関連付け |
+| **電卓 (Calculator)** | `apps/calculator/` | 四則演算電卓 | 8桁高精度四則演算・数式表示・符号反転・パーセント・キーボード操作対応 (0-9, +-*/, Enter, Esc) |
+| **時計 (Clock)** | `apps/clock/` | 世界時計/ストップウォッチ/タイマー | SVG アナログ時計・デジタル時計・ミリ秒ストップウォッチ・ラップ記録・カウントダウンタイマー (Web Audio アラーム & 通知) |
+| **ファイル (FileManager)** | `apps/filemanager/` | 仮想 FS マネージャー | 階層ナビゲーション・サイドバーショートカット・フォルダ/ファイル作成・リネーム・削除・PCからのファイル導入 (Upload/Drag&Drop)・PCへの保存 (Download)・コンテキストメニュー |
+
+---
+
+## `アプリ多言語化 (App i18n) & マニフェスト拡張` (Phase 6)
+
+### 多言語対応マニフェスト (`define.json`)
+`name` および `description` に言語別オブジェクト（`Record<string, string>`）を指定可能です。後方互換性のため文字列指定も継続してサポートされます。また、アプリ固有の辞書ディレクトリ（`"i18n": "./i18n/"`）を指定できます。
+
+```json
+{
+  "id": "eskit.notepad",
+  "name": {
+    "ja": "メモ帳",
+    "en": "Notepad"
+  },
+  "description": {
+    "ja": "シンプルなテキスト・コードエディタ",
+    "en": "Simple text and code editor"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "i18n": "./i18n/"
+}
+```
+
+### アプリ固有の翻訳辞書 (`apps/*/i18n/{lang}.json`)
+アプリディレクトリ内に各言語の JSON 辞書を配置します。
+
+```json
+// apps/notepad/i18n/ja.json
+{
+  "file": "ファイル",
+  "save": "保存",
+  "unsaved": "未保存の変更があります"
+}
+```
+
+### アプリ内での翻訳利用 (`this.t()`)
+`ESKitApp` クラスの `this.t(key, vars)` は、アプリ自身の名前空間（例: `notepad.file`）およびグローバルシステム辞書を透過的に解決します。
+
+```js
+// 短縮キー、フルキーのどちらでも利用可能
+this.t("save");          // => "保存" (apps/notepad/i18n/ja.json)
+this.t("notepad.save");  // => "保存"
+```
+
+### ウィンドウタイトルの自動同期 & リアクティブ更新
+アプリはマニフェスト名および言語設定（`System.i18n.locale`）に応じたウィンドウタイトルを自動的に同期します。アプリ固有のタイトルを設定する場合、文字列に加えて Hamon シグナルや getter 関数を渡すことで、リアクティブなタイトル同期が可能です。
+
+```js
+// 動的なリアクティブタイトル
+this.setTitle(() => `${this.filePath.value || "Untitled"} - ${this.t("notepad.name")}`);
+```
+
+
 
 

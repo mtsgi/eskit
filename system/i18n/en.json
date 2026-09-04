@@ -25,7 +25,9 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "home": "Home / Drawer",
-    "snapAssistTitle": "Select an App to Snap"
+    "snapAssistTitle": "Select an App to Snap",
+    "noAppForFile": "No application found to open file with extension \"{ext}\".",
+    "openFileError": "Cannot Open File"
   },
   "apps": {
     "welcome": {
@@ -45,7 +47,92 @@
     "test": {
       "name": "SystemVerifier",
       "description": "Automated system verification suite"
+    },
+    "notepad": {
+      "name": "Notepad",
+      "description": "Simple text & code editor"
+    },
+    "calculator": {
+      "name": "Calculator",
+      "description": "Standard arithmetic calculator"
+    },
+    "clock": {
+      "name": "Clock",
+      "description": "World clock, stopwatch, and timer"
+    },
+    "filemanager": {
+      "name": "Files",
+      "description": "Virtual file system manager"
     }
+  },
+  "notepad": {
+    "new": "New",
+    "open": "Open",
+    "save": "Save",
+    "saveAs": "Save As",
+    "download": "Save to PC",
+    "untitled": "Untitled.txt",
+    "lines": "lines",
+    "chars": "chars",
+    "saved": "File saved successfully",
+    "savePrompt": "Enter destination path:",
+    "openPrompt": "Enter path to open:",
+    "fileNotFound": "File not found: {path}"
+  },
+  "calculator": {
+    "clear": "C",
+    "allClear": "AC"
+  },
+  "clock": {
+    "tabClock": "Clock",
+    "tabStopwatch": "Stopwatch",
+    "tabTimer": "Timer",
+    "start": "Start",
+    "pause": "Pause",
+    "resume": "Resume",
+    "reset": "Reset",
+    "lap": "Lap",
+    "lapNum": "Lap {num}",
+    "timerFinished": "Timer finished!",
+    "hours": "Hours",
+    "minutes": "Mins",
+    "seconds": "Secs"
+  },
+  "filemanager": {
+    "title": "Files",
+    "home": "Home",
+    "desktop": "Desktop",
+    "documents": "Documents",
+    "shared": "Shared",
+    "system": "System",
+    "apps": "Apps",
+    "newFolder": "New Folder",
+    "newFile": "New File",
+    "upload": "Import from PC",
+    "download": "Save to PC",
+    "rename": "Rename",
+    "delete": "Delete",
+    "refresh": "Refresh",
+    "emptyFolder": "This folder is empty",
+    "folderNamePrompt": "Enter new folder name:",
+    "fileNamePrompt": "Enter new file name:",
+    "renamePrompt": "Enter new name:",
+    "confirmDelete": "Are you sure you want to delete '{name}'?",
+    "items": "{count} items",
+    "details": "Properties"
+  },
+  "pwa": {
+    "updateTitle": "System Update",
+    "updateMessage": "A new version of ESKit is available. Reload now to apply updates?",
+    "reload": "Reload"
+  },
+  "registry": {
+    "installConfirmTitle": "Install External App",
+    "install": "Install",
+    "installCancelled": "App installation was cancelled",
+    "requiredPerms": "Required Permissions:",
+    "noPerms": "None",
+    "installPrompt": "Do you want to install this application?"
   },
   "login": {
     "title": "ESKit Login",
@@ -102,6 +189,9 @@
       "stat": "Display detailed file/directory info",
       "changeDir": "Change current working directory",
       "currentDir": "Print current working directory",
+      "openFile": "Open file with associated app",
+      "installApp": "Install app from external URL",
+      "uninstallApp": "Uninstall external app",
       "listProcesses": "List active system processes",
       "listApps": "List registered applications",
       "loadApp": "Launch an application",
@@ -145,6 +235,16 @@
     "save": "Save",
     "close": "Close"
   },
+  "filePicker": {
+    "title": "Select File",
+    "open": "Open",
+    "cancel": "Cancel",
+    "allFiles": "All Files (*.*)",
+    "imageFiles": "Image Files",
+    "empty": "No files found",
+    "up": "Up",
+    "fileName": "File Name"
+  },
   "settings": {
     "title": "Settings",
     "tabs": {
@@ -162,6 +262,9 @@
       "auto": "System (Auto)",
       "themePreset": "Theme Preset",
       "wallpaper": "Desktop Wallpaper",
+      "pickWallpaper": "Choose from files",
+      "customWallpaper": "Custom Wallpaper",
+      "chooseWallpaperFile": "Choose Wallpaper Image",
       "importTheme": "Import Theme",
       "importPlaceholder": "https://example.com/theme.json",
       "importButton": "Import from URL",

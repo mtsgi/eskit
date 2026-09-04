@@ -95,7 +95,21 @@ export default class ESKitTaskbarElement extends HTMLElement {
 
     this.#offLocale = sys.events.on("system:locale-changed", () => {
       this.#updateClock();
+      this.#refreshAppButtons();
     });
+  }
+
+  #refreshAppButtons() {
+    const container = this.shadowRoot.getElementById("taskbar-apps");
+    if (!container) return;
+    for (const btn of container.querySelectorAll(".app-btn")) {
+      const uuid = btn.dataset.uuid;
+      const app = window.System?.getApp(uuid);
+      if (app) {
+        const label = btn.querySelector(".app-btn-label");
+        if (label) label.textContent = app.name;
+      }
+    }
   }
 
   // ─── アプリボタン管理 ─────────────────────────────────────────────────
