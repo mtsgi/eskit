@@ -21,6 +21,8 @@ export default class ESKitApp {
   _manifest      = null;
   _state         = "initializing";
   _windowElement = null;
+  /** @type {object|null} アプリ起動時に渡された引数やコンテキストデータ */
+  launchData     = null;
   /** @type {import('./hamon.js').HamonScope|null} Hamon スコープ (テンプレートまたは手動で設定) */
   _hamonScope    = null;
 
@@ -44,10 +46,21 @@ export default class ESKitApp {
     });
   }
 
+  /**
+   * 現在のウィンドウタイトルを取得する
+   * @returns {string}
+   */
+  get windowTitle() {
+    return this.name;
+  }
+
   // ─── ライフサイクルフック (サブクラスでオーバーライド) ──────────────────────
 
   /** アプリ起動時に呼ばれる。querySelector() 使用可。 */
   initialize() {}
+
+  /** ファイル関連付け等でファイルが開かれたとき @param {string} filePath */
+  onOpenFile(_filePath) {}
 
   /** アプリ終了時に呼ばれる。タイマー解除などのクリーンアップを実装する。 */
   close() {}
@@ -70,16 +83,53 @@ export default class ESKitApp {
   /** 別のアプリから IPC メッセージを受信したとき @param {*} data */
   onMessage(_data) {}
 
-  // ─── 開発者 API ────────────────────────────────────────────────────────────
+  #titleDispose = null;
+  _customTitle  = false;
+
+  /**
+   * マニフェスト名に基づく自動タイトル同期を初期化する (内部利用)
+   */
+  _initTitleSync() {
+    if (this._titleDispose) return;
+    this._titleDispose = this.hamon.effect(() => {
+      if (this._customTitle) return;
+      const autoTitle = window.System?.i18n?.getAppName(this._manifest) || this.name;
+      this.#applyTitle(autoTitle);
+    });
+  }
 
   /**
    * ウィンドウタイトルを変更する。
-   * @param {string} title
+   * 文字列、関数 (getter)、Hamon Signal、または i18n 反映関数を渡すことが可能。
+   * @param {string|Function|import('./hamon.js').Signal<string>} title
    */
   setTitle(title) {
-    this.name = title;
-    this._windowElement?.setTitle(title);
-    window.System?.events.emit("app:titleChanged", { uuid: this._uuid, title });
+    this._customTitle = true;
+    if (this._titleDispose) {
+      this._titleDispose();
+      this._titleDispose = null;
+    }
+
+    if (typeof title === "function") {
+      this._titleDispose = this.hamon.effect(() => {
+        const val = title();
+        this.#applyTitle(val);
+      });
+    } else if (title && typeof title === "object" && "value" in title) {
+      this._titleDispose = this.hamon.effect(() => {
+        const val = title.value;
+        this.#applyTitle(val);
+      });
+    } else {
+      this.#applyTitle(title);
+    }
+  }
+
+  #applyTitle(title) {
+    const str = String(title ?? "");
+    this.name = str;
+    this._windowElement?.setTitle(str);
+    window.System?.events?.emit("app:titleChanged", { uuid: this._uuid, title: str });
   }
 
   /**
@@ -102,12 +152,33 @@ export default class ESKitApp {
 
   /**
    * 翻訳テキストを取得する (i18n)
+   * アプリ短縮IDによる名前空間の自動補完 (例: this.t("title") -> "myapp.title") もサポート
    * @param {string} key
    * @param {Record<string, string|number>} [vars]
    * @returns {string}
    */
   t(key, vars) {
-    return window.System?.i18n?.t(key, vars) ?? key;
+    if (!key) return "";
+    const i18n = window.System?.i18n;
+    if (!i18n) return key;
+
+    // ドットを含まないキーの場合、アプリ自身の名前空間を優先して試行
+    if (!key.includes(".") && this._manifest?.id) {
+      const rawId = this._manifest.id.replace(/^eskit\./, "").replace(/^apps\//, "").replace(/\/$/, "");
+      const candidates = [rawId];
+      if (rawId.includes(".")) {
+        candidates.push(rawId.split(".").pop());
+      }
+      for (const candidate of candidates) {
+        const fullKey = `${candidate}.${key}`;
+        const resolved = i18n.t(fullKey, vars);
+        if (resolved !== fullKey) {
+          return resolved;
+        }
+      }
+    }
+
+    return i18n.t(key, vars);
   }
 
   /**
@@ -135,6 +206,15 @@ export default class ESKitApp {
    */
   async prompt(opts) {
     return window.System?.dialog?.prompt(opts) ?? null;
+  }
+
+  /**
+   * ファイルピッカーダイアログを表示してファイルを選択する
+   * @param {{ title?: string, startPath?: string, accepts?: string[] }} [opts]
+   * @returns {Promise<string|null>} 選択されたファイルの絶対パス、またはキャンセルの場合 null
+   */
+  async showOpenFilePicker(opts) {
+    return window.System?.showOpenFilePicker(opts) ?? null;
   }
 
   /**

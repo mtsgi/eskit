@@ -7,14 +7,6 @@ export default class WelcomeApp extends ESKitApp {
 
   constructor() {
     super();
-    this.name = "WelcomeApp";
     this.template = createTemplate(this);
-  }
-
-  initialize() {
-    this.setTitle(this.t("apps.welcome.name"));
-    this.hamon.effect(() => {
-      this.setTitle(this.t("apps.welcome.name"));
-    });
   }
 }

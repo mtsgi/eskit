@@ -1,0 +1,20 @@
+{
+  "id": "eskit.filemanager",
+  "name": {
+    "ja": "ファイル",
+    "en": "Files"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": {
+    "ja": "仮想ファイルシステムマネージャー",
+    "en": "Virtual file system manager"
+  },
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "folder"
+  },
+  "permissions": ["fs.read", "fs.write", "notifications"],
+  "i18n": "./i18n/"
+}

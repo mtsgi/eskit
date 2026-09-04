@@ -164,6 +164,15 @@ export default class ESKitDialogElement extends HTMLElement {
     });
   }
 
+  /**
+   * 汎用ファイル選択ダイアログを表示する。
+   * @param {{ title?: string, startPath?: string, accepts?: string[] }} opts
+   * @returns {Promise<string|null>}
+   */
+  showOpenFilePicker(opts) {
+    return window.System?.showOpenFilePicker(opts) ?? null;
+  }
+
   // ─── 内部実装 ────────────────────────────────────────────────────────────
 
   #cancelPending() {

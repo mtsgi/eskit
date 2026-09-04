@@ -1,0 +1,33 @@
+{
+  "id": "eskit.notepad",
+  "name": {
+    "ja": "Notepad",
+    "en": "Notepad"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": {
+    "ja": "シンプルなテキスト・コードエディタ",
+    "en": "Simple text & code editor"
+  },
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "file-text"
+  },
+  "permissions": ["fs.read", "fs.write", "notifications"],
+  "fileAssociations": [
+    ".txt",
+    ".md",
+    ".json",
+    ".js",
+    ".css",
+    ".html",
+    ".csv",
+    ".log",
+    ".xml",
+    ".yaml",
+    ".yml"
+  ],
+  "i18n": "./i18n/"
+}

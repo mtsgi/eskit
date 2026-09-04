@@ -1,13 +1,20 @@
 {
   "id": "eskit.welcome",
-  "name": "WelcomeApp",
+  "name": {
+    "ja": "ようこそ",
+    "en": "Welcome"
+  },
   "entry": "main.js",
   "version": "1.0.0",
-  "description": "ようこそアプリ",
+  "description": {
+    "ja": "ESKit の基本機能と使い方を紹介するようこそアプリ",
+    "en": "Welcome app introducing ESKit features and usage"
+  },
   "icon": {
     "type": "set",
     "set": "lucide",
     "name": "sparkles"
   },
-  "permissions": []
+  "permissions": [],
+  "i18n": "./i18n/"
 }

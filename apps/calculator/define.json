@@ -1,0 +1,20 @@
+{
+  "id": "eskit.calculator",
+  "name": {
+    "ja": "電卓",
+    "en": "Calculator"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": {
+    "ja": "四則演算電卓",
+    "en": "Basic arithmetic calculator"
+  },
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "calculator"
+  },
+  "permissions": [],
+  "i18n": "./i18n/"
+}

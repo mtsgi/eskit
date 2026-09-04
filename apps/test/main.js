@@ -1,4 +1,5 @@
 import ESKitApp from "system/app.js";
+import ESKitManifest from "system/manifest.js";
 import hamon, { signal, list } from "system/hamon.js";
 import style from "./style.js";
 
@@ -172,6 +173,16 @@ export default class SystemVerifier extends ESKitApp {
       () => this.#testPermissionStateAndGrant(),
       () => this.#testPermissionSingleRevoke(),
       () => this.#testPermissionRevokeAll(),
+    ]);
+
+    await this.#runSection("Phase 6: Sample Apps & App i18n", [
+      () => this.#testPhase6SampleAppsRegistered(),
+      () => this.#testPhase6PolymorphicManifest(),
+      () => this.#testPhase6AppDictionaryDynamicLoading(),
+      () => this.#testPhase6AppTitleAutoSync(),
+      () => this.#testPhase6LoginScreenI18n(),
+      () => this.#testPhase6FileAssociations(),
+      () => this.#testPhase6SampleFiles(),
     ]);
 
     this.#updateSummary();
@@ -731,11 +742,24 @@ export default class SystemVerifier extends ESKitApp {
   }
 
   async #testI18nExtend() {
-    await this.#test("i18n: アプリ独自辞書拡張 (extend)", () => {
-      System.i18n.extend("verifierTest", "ja", { testGreeting: "こんにちは {name}" });
-      const res = System.i18n.t("verifierTest.testGreeting", { name: "ESKit" });
-      this.#assert(res === "こんにちは ESKit", `res=${res}`);
-      return res;
+    await this.#test("i18n: アプリ独自辞書拡張 (extend)", async () => {
+      const prevLocale = System.i18n.current;
+      try {
+        await System.i18n.setLocale("ja");
+        System.i18n.extend("verifierTest", "ja", { testGreeting: "こんにちは {name}" });
+        const res = System.i18n.t("verifierTest.testGreeting", { name: "ESKit" });
+        this.#assert(res === "こんにちは ESKit", `res=${res}`);
+
+        // en ロケールへの拡張 & 切替も検証
+        System.i18n.extend("verifierTest", "en", { testGreeting: "Hello {name}" });
+        await System.i18n.setLocale("en");
+        const resEn = System.i18n.t("verifierTest.testGreeting", { name: "ESKit" });
+        this.#assert(resEn === "Hello ESKit", `resEn=${resEn}`);
+
+        return res;
+      } finally {
+        await System.i18n.setLocale(prevLocale);
+      }
     });
   }
 
@@ -912,6 +936,202 @@ export default class SystemVerifier extends ESKitApp {
       this.#assert(System.permissions.getPermissionState(testAppId, "fs.write") === "unprompted", "fs.write is not unprompted");
 
       return "All permissions cleared";
+    });
+  }
+
+  // ─── Phase 6: サンプルアプリ & ファイル関連付けテスト ─────────────────────────
+
+  async #testPhase6SampleAppsRegistered() {
+    await this.#test("Phase 6: 新規標準アプリ (Notepad, Calculator, Clock, FileManager) 登録確認", () => {
+      const apps = System.registry.list();
+      const expectedIds = ["eskit.notepad", "eskit.calculator", "eskit.clock", "eskit.filemanager"];
+      for (const id of expectedIds) {
+        this.#assert(apps.some((a) => a.id === id), `App "${id}" is not registered`);
+      }
+      return `${expectedIds.length} apps registered`;
+    });
+  }
+
+  async #testPhase6PolymorphicManifest() {
+    await this.#test("Phase 6: 多言語マニフェスト (Polymorphic Manifest) 検証", async () => {
+      // 1. ESKitManifest.validate の多言語オブジェクト対応
+      const mockRaw = {
+        id: "eskit.test.poly",
+        name: { ja: "テストアプリ", en: "Test App" },
+        description: { ja: "説明文", en: "Description" },
+        entry: "main.js",
+        version: "1.0.0",
+        i18n: "./i18n/",
+      };
+      const validated = (System.manifest || ESKitManifest).validate(mockRaw);
+      this.#assert(typeof validated.name === "object", "validated.name should be object");
+      this.#assert(validated.name.ja === "テストアプリ", "validated.name.ja mismatch");
+      this.#assert(validated.name.en === "Test App", "validated.name.en mismatch");
+      this.#assert(validated.i18n === "./i18n/", "validated.i18n mismatch");
+
+      // 2. System.i18n.getAppName / getAppDescription の解決
+      const nameJa = System.i18n.getAppName(validated, "ja");
+      const nameEn = System.i18n.getAppName(validated, "en");
+      this.#assert(nameJa === "テストアプリ", `getAppName ja failed: got "${nameJa}"`);
+      this.#assert(nameEn === "Test App", `getAppName en failed: got "${nameEn}"`);
+
+      // 3. 後方互換性 (string 単一指定)
+      const legacyManifest = (System.manifest || ESKitManifest).validate({
+        id: "eskit.legacy",
+        name: "レガシー",
+        entry: "main.js",
+        version: "1.0.0",
+      });
+      this.#assert(System.i18n.getAppName(legacyManifest, "ja") === "レガシー", "legacy name ja mismatch");
+      this.#assert(System.i18n.getAppName(legacyManifest, "en") === "レガシー", "legacy name en fallback mismatch");
+
+      return "Polymorphic manifest & backward compatibility verified";
+    });
+  }
+
+  async #testPhase6AppDictionaryDynamicLoading() {
+    await this.#test("Phase 6: アプリ辞書の動的読み込み (loadAppDictionary)", async () => {
+      // FileManager の辞書をロード
+      await System.i18n.loadAppDictionary("apps/filemanager/", "eskit.filemanager", "./i18n/");
+
+      const origLocale = System.i18n.current;
+      await System.i18n.setLocale("ja");
+      const jaDesktop = System.i18n.t("filemanager.desktop");
+      this.#assert(jaDesktop === "デスクトップ", `filemanager.desktop (ja) expected デスクトップ, got "${jaDesktop}"`);
+
+      await System.i18n.setLocale("en");
+      const enDesktop = System.i18n.t("filemanager.desktop");
+      this.#assert(enDesktop === "Desktop", `filemanager.desktop (en) expected Desktop, got "${enDesktop}"`);
+
+      await System.i18n.setLocale(origLocale);
+      return "App dictionaries dynamically loaded and translated for multiple locales";
+    });
+  }
+
+  async #testPhase6AppTitleAutoSync() {
+    await this.#test("Phase 6: ウィンドウタイトル自動同期 & リアクティブ setTitle", async () => {
+      // 1. ESKitApp の _initTitleSync 自動同期テスト
+      const app = new ESKitApp();
+      app._manifest = {
+        id: "eskit.test.sync",
+        name: { ja: "日本語タイトル", en: "English Title" },
+      };
+
+      const origLocale = System.i18n.current;
+      await System.i18n.setLocale("ja");
+      app._initTitleSync();
+      this.#assert(app.windowTitle === "日本語タイトル", `Expected "日本語タイトル", got "${app.windowTitle}"`);
+
+      await System.i18n.setLocale("en");
+      this.#assert(app.windowTitle === "English Title", `Expected "English Title", got "${app.windowTitle}"`);
+
+      // 2. setTitle() にシグナル・関数を渡した場合のリアクティブ同期
+      const dynamicName = signal("Document 1");
+      app.setTitle(() => `${dynamicName.value} - App`);
+      this.#assert(app.windowTitle === "Document 1 - App", `Reactive setTitle initial mismatch: "${app.windowTitle}"`);
+
+      dynamicName.value = "Document 2";
+      this.#assert(app.windowTitle === "Document 2 - App", `Reactive setTitle updated mismatch: "${app.windowTitle}"`);
+
+      // 3. アプリ短縮IDによる名前空間の自動補完 (app.t("testKey") -> "sync.testKey")
+      await System.i18n.setLocale("ja");
+      System.i18n.extend("sync", "ja", { testKey: "値" });
+      this.#assert(app.t("testKey") === "値", `Relative app.t failed, got "${app.t("testKey")}"`);
+
+      await System.i18n.setLocale(origLocale);
+      return "Title auto-sync, reactive setTitle and scoped app.t verified";
+    });
+  }
+
+  async #testPhase6LoginScreenI18n() {
+    await this.#test("Phase 6: ログイン画面の多言語対応 (login.*) 検証", async () => {
+      const origLocale = System.i18n.current;
+
+      // 1. ja ロケールでのキー解決
+      await System.i18n.setLocale("ja");
+      const titleJa = System.i18n.t("login.title");
+      const userJa = System.i18n.t("login.user");
+      const passJa = System.i18n.t("login.password");
+      const btnJa = System.i18n.t("login.loginButton");
+      const subJa = System.i18n.t("login.subtitleLogin");
+
+      this.#assert(titleJa !== "login.title" && titleJa.includes("ログイン"), `login.title (ja) invalid: ${titleJa}`);
+      this.#assert(userJa === "ユーザー", `login.user (ja) invalid: ${userJa}`);
+      this.#assert(passJa === "パスワード", `login.password (ja) invalid: ${passJa}`);
+      this.#assert(btnJa === "ログイン", `login.loginButton (ja) invalid: ${btnJa}`);
+      this.#assert(subJa !== "login.subtitleLogin" && subJa.length > 0, `login.subtitleLogin (ja) invalid: ${subJa}`);
+
+      // 2. en ロケールでのキー解決
+      await System.i18n.setLocale("en");
+      const titleEn = System.i18n.t("login.title");
+      const userEn = System.i18n.t("login.user");
+      const passEn = System.i18n.t("login.password");
+      const btnEn = System.i18n.t("login.loginButton");
+      const subEn = System.i18n.t("login.subtitleLogin");
+
+      this.#assert(titleEn === "ESKit Login", `login.title (en) invalid: ${titleEn}`);
+      this.#assert(userEn === "User", `login.user (en) invalid: ${userEn}`);
+      this.#assert(passEn === "Password", `login.password (en) invalid: ${passEn}`);
+      this.#assert(btnEn === "Log In", `login.loginButton (en) invalid: ${btnEn}`);
+      this.#assert(subEn.includes("Sign in"), `login.subtitleLogin (en) invalid: ${subEn}`);
+
+      // 3. LoginScreen カスタム要素のレンダリング & 言語トグル検証
+      const loginEl = document.createElement("eskit-login-screen");
+      document.body.appendChild(loginEl);
+      try {
+        const shadow = loginEl.shadowRoot;
+        this.#assert(shadow !== null, "login-screen shadowRoot is null");
+
+        // en 時のタイトル確認
+        const titleEl = shadow.getElementById("login-title");
+        this.#assert(titleEl.textContent === "ESKit Login", `Shadow title en mismatch: ${titleEl.textContent}`);
+
+        // 言語切替トグルテスト
+        loginEl.toggleLanguage();
+        this.#assert(System.i18n.current === "ja", `toggleLanguage failed to switch to ja`);
+        this.#assert(titleEl.textContent.includes("ログイン"), `Shadow title ja mismatch: ${titleEl.textContent}`);
+      } finally {
+        loginEl.remove();
+        await System.i18n.setLocale(origLocale);
+      }
+
+      return "Login screen i18n & reactive language switcher verified";
+    });
+  }
+
+  async #testPhase6FileAssociations() {
+    await this.#test("Phase 6: ファイル関連付け (findAppByExtension) 検証", () => {
+      const notepadApp = System.registry.findAppByExtension(".txt");
+      this.#assert(notepadApp !== null, "App for .txt not found");
+      this.#assert(notepadApp.id === "eskit.notepad", `expected eskit.notepad, got ${notepadApp.id}`);
+
+      const mdApp = System.registry.findAppByExtension(".md");
+      this.#assert(mdApp?.id === "eskit.notepad", ".md not associated with notepad");
+
+      const jsApp = System.registry.findAppByExtension("js");
+      this.#assert(jsApp?.id === "eskit.notepad", ".js not associated with notepad");
+
+      return "OK (.txt, .md, .js -> eskit.notepad)";
+    });
+  }
+
+  async #testPhase6SampleFiles() {
+    await this.#test("Phase 6: ユーザー初期サンプルファイル (Welcome.txt, GettingStarted.md, hello.js)", async () => {
+      const user = System.currentUser?.id;
+      this.#assert(user !== undefined, "currentUser is not available");
+
+      const welcome = `/home/${user}/desktop/Welcome.txt`;
+      const readme = `/home/${user}/documents/GettingStarted.md`;
+      const cliScript = `/home/${user}/bin/hello.js`;
+
+      this.#assert(await System.fs.exists(welcome), "Welcome.txt not found on desktop");
+      this.#assert(await System.fs.exists(readme), "GettingStarted.md not found in documents");
+      this.#assert(await System.fs.exists(cliScript), "hello.js not found in ~/bin");
+
+      const welcomeContent = await System.fs.readFile(welcome);
+      this.#assert(welcomeContent.includes("ESKit"), "Welcome.txt content invalid");
+
+      return "All sample files verified";
     });
   }
 

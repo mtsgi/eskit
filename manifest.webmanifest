@@ -1,0 +1,20 @@
+{
+  "name": "ESKit",
+  "short_name": "ESKit",
+  "description": "Vanilla JavaScript + Web Components で構築されたウェブデスクトップ OS",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1e1e2e",
+  "background_color": "#181825",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"]
+}
