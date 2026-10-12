@@ -69,7 +69,7 @@ export default class ESKishApp extends ESKitApp {
           <div class="line info"><span class="text">${() => this.t("terminal.banner")}</span></div>
           ${list(
             () => this.#lines.value,
-            (item) => hamon`<div class="line ${() => item.type}">${() => item.prompt ? hamon`<span class="prompt">${item.prompt}</span>` : ""}<span class="text">${() => item.text}</span></div>`,
+            (item) => hamon`<div :class=${() => `line ${item.type}`}>${() => item.prompt ? hamon`<span class="prompt">${item.prompt}</span>` : ""}<span class="text">${() => item.text}</span></div>`,
           )}
         </div>
         <div class="input-row">
@@ -263,6 +263,7 @@ export default class ESKishApp extends ESKitApp {
 
   /**
    * コマンド名と引数を受け取り、対応するビルトイン処理を実行する。
+   * ビルトインにない場合は登録コマンド、VFS のスクリプトの順に探索する。
    * @param {string} cmd コマンド名
    * @param {string[]} args 引数配列
    * @returns {Promise<string|null>} 出力テキストまたは null
@@ -594,13 +595,18 @@ export default class ESKishApp extends ESKitApp {
             const content = await this.fs.readFile(scriptPath);
             const blob = new Blob([content], { type: "text/javascript" });
             const blobUrl = URL.createObjectURL(blob);
+
             try {
               const mod = await import(blobUrl);
-              const fn = typeof mod === "function" ? mod : (mod.default || mod[cmd]);
+
+              // import() の結果はモジュールの名前空間。default をコマンド名の export より優先する。
+              const fn = mod.default || mod[cmd];
+
               if (typeof fn === "function") {
                 return await fn.call(this, { System, app: this, fs: this.fs, args });
               }
             } finally {
+              // コマンドの非同期実行が完了または失敗してから、読み込み用 URL を解放する。
               URL.revokeObjectURL(blobUrl);
             }
           }

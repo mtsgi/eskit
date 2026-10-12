@@ -568,7 +568,7 @@ await this.fs.rename(oldPath, newPath)// リネーム/移動 (permissions: "fs.w
 | プロパティ | 説明 |
 |----------|------|
 | `this.name` | アプリ表示名 (コンストラクタクラス名、または `setTitle()` で変更) |
-| `this.manifest` | 読み取り専用・イミュータブルな `Manifest` オブジェクト |
+| `this.manifest` | 全階層をコピー・freezeした読み取り専用 `Manifest`。多言語名・配列なども内部参照を共有しない |
 | `this._uuid` | アプリ固有の UUID |
 | `this._manifest` | `define.json` から読み込まれた Manifest (内部用) |
 | `this._state` | `"running"`, `"minimized"`, `"maximized"`, `"closed"` |
@@ -746,6 +746,19 @@ scope dispose 時に `removeEventListener` が自動呼び出しされる。
 
 #### 属性バインディング `:attr`
 
+動的な属性値は必ず `:attr=${value}` の形式で指定します。`title=${value}`、
+`title="${value}"`、`class="prefix ${value}"` はコンパイル時に `TypeError` になります。
+属性名・タグ名の補間、引用符付き／部分的なバインディングも非対応です。
+静的な `title="text"` は引き続き使用できます。
+
+```js
+// 移行前: hamon`<div class="line ${type}" title=${title}></div>`
+hamon`<div :class=${() => `line ${type.value}`} :title=${title}></div>`;
+```
+
+属性値はDOMのプロパティまたは `setAttribute` で設定され、HTMLとして再解析されません。
+これは属性注入の防止であり、危険なURLやイベント属性など任意の属性値の安全性を保証するものではありません。
+
 ```html
 <input :value=${() => name.value} :disabled=${() => locked.value}>
 <div :class=${() => active.value ? "on" : "off"}>
@@ -887,7 +900,7 @@ System.theme.vars;        // 現在適用されている全 CSS 変数マップ
 System.theme.wallpaper;   // 現在の壁紙 CSS 値
 
 System.theme.setMode("dark");                  // カラーモードを変更 ("light" | "dark" | "auto")
-System.theme.apply("nord");                    // プリセットテーマを適用
+await System.theme.apply("nord");              // プリセットテーマを適用
 System.theme.applyVars({ "--kit-color-primary": "#e63946" }); // カスタム CSS 変数を直接適用
 await System.theme.setWallpaper("/home/admin/Pictures/my-wall.png"); // VFS パスまたは CSS 値で壁紙を変更 (Blob URL 自動生成)
 await System.theme.load("https://example.com/theme.json"); // 外部 URL からテーマを fetch・インポート
@@ -1033,10 +1046,7 @@ await System.openFile("/home/alice/desktop/Welcome.txt"); // Notepad が起動�
 ```js
 export default class NotepadApp extends ESKitApp {
   initialize() {
-    // 起動オプション（launchData）の確認
-    if (this.launchData?.filePath) {
-      this.onOpenFile(this.launchData.filePath);
-    }
+    // UIの初期化のみ。filePathの配送はSystemが一度だけ行う。
   }
 
   // 関連付け・オープン用ライフサイクルフック
@@ -1047,6 +1057,11 @@ export default class NotepadApp extends ESKitApp {
 }
 ```
 
+`loadApp()` は `initialize()` の後に `onOpenFile()` の完了を待ち、`app:opened` を発行します。
+読み込みに失敗した場合は翻訳済みのエラー通知を表示し、アプリを残してUUIDを返します。
+`openFile()` は `Promise<string|null>` を返し、対応アプリがない場合はダイアログ表示後に `null` を返します。
+タスクバーには現在のウィンドウタイトルが反映され、言語変更でファイル名を上書きしません。
+
 ---
 
 ## `PWA & Service Worker` (Phase 6)
@@ -1056,6 +1071,15 @@ ESKit は PWA (Progressive Web Apps) として設計されており、ブラウ�
 - **`manifest.webmanifest`**: 相対 `start_url: "./index.html"` および `scope: "./"` を指定し、ルートおよびサブディレクトリ（GitHub Pages 等）への配置に対応。
 - **`sw.js`**: **Network-First** 戦略を採用。オンライン時は常に最新コードを即時反映し、オフライン・通信障害時はキャッシュからレスポンス。
 - **`system/pwa.js`**: Service Worker の更新を監視し、新規バージョン検知時にユーザーへ再読み込み通知トーストを表示。
+
+更新SWは待機し、通知の「再読み込み」を選んだタブで `SKIP_WAITING` を送信します。
+対象SWへの制御切替を確認してから、一度だけ再読み込みします。初回インストールと他タブの更新では自動再読み込みしません。
+通知は待機中SWごとに一度、操作するまで表示されます。送信失敗・SW失効・30秒の待機超過では
+再読み込みせずエラーと再試行ボタンを表示します。保存していない編集内容は再読み込み前に保存してください。
+
+壁紙・テーマの適用は非同期です。呼び出し側は `await System.theme.setWallpaper(value)` /
+`await System.theme.apply(id)` の後に `resolvedWallpaper` を参照してください。
+処理が競合した場合は最新の選択を保持し、古い処理の完了で上書きしません。
 
 ---
 
@@ -1120,7 +1144,5 @@ this.t("notepad.save");  // => "保存"
 // 動的なリアクティブタイトル
 this.setTitle(() => `${this.filePath.value || "Untitled"} - ${this.t("notepad.name")}`);
 ```
-
-
 
 

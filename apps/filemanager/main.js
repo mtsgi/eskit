@@ -15,6 +15,9 @@ export default class FileManagerApp extends ESKitApp {
   #historyIndex = 0;
   #fileInput = null;
 
+  /**
+   * ファイル一覧、移動履歴、選択状態と操作画面を作成する。
+   */
   constructor() {
     super();
 
@@ -197,7 +200,7 @@ export default class FileManagerApp extends ESKitApp {
                           :style=${`color: ${item.type === "dir" ? "var(--kit-color-primary, #3b82f6)" : "var(--kit-fg)"};`}
                         ></eskit-icon>
                       </div>
-                      <div class="file-item-name" title=${item.name}>${item.name}</div>
+                      <div class="file-item-name" :title=${item.name}>${item.name}</div>
                     </div>
                   `;
                 }
@@ -215,6 +218,9 @@ export default class FileManagerApp extends ESKitApp {
     `;
   }
 
+  /**
+   * ホストからのアップロード入力を準備し、初期ディレクトリを読み込む。
+   */
   initialize() {
     // タイトルは ESKitApp 基底クラスが自動同期
 
@@ -230,6 +236,11 @@ export default class FileManagerApp extends ESKitApp {
     this.#loadDirectory(this.#cwd.value);
   }
 
+  /**
+   * ファイルの拡張子に対応するアイコン名を返す。
+   * @param {string} name ファイル名。
+   * @returns {string} Lucide のアイコン名。
+   */
   #getIconForFile(name) {
     const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
     switch (ext) {
@@ -268,12 +279,22 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 拡張子から画像ファイルか判定する。
+   * @param {string} name ファイル名。
+   * @returns {boolean} 対応する画像形式の場合は true。
+   */
   #isImageFile(name) {
     if (!name) return false;
     const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
     return ["png", "jpg", "jpeg", "webp", "svg", "gif", "bmp"].includes(ext);
   }
 
+  /**
+   * バイト数を B・KB・MB・GB の表示へ変換する。
+   * @param {number} bytes ファイルのバイト数。
+   * @returns {string} 単位付きのサイズ表示。
+   */
   #formatBytes(bytes) {
     if (bytes === 0) return "0 B";
     const k = 1024;
@@ -282,6 +303,11 @@ export default class FileManagerApp extends ESKitApp {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   }
 
+  /**
+   * 指定したディレクトリの項目を読み込み、一覧と選択状態を更新する。
+   * @param {string} path VFS の絶対パス。
+   * @returns {Promise<void>} 一覧更新またはエラー処理の終了時に解決する。
+   */
   async #loadDirectory(path) {
     try {
       const entries = await this.fs.readdir(path);
@@ -314,6 +340,10 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 指定したディレクトリへ移動し、移動履歴を更新する。
+   * @param {string} targetPath 移動先の VFS パス。
+   */
   #navigateTo(targetPath) {
     if (!targetPath) return;
     let path = targetPath.trim();
@@ -329,6 +359,9 @@ export default class FileManagerApp extends ESKitApp {
     this.#loadDirectory(path);
   }
 
+  /**
+   * 移動履歴の一つ前のディレクトリを表示する。
+   */
   #goBack() {
     if (this.#historyIndex > 0) {
       this.#historyIndex--;
@@ -338,6 +371,9 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 移動履歴の一つ後のディレクトリを表示する。
+   */
   #goForward() {
     if (this.#historyIndex < this.#history.length - 1) {
       this.#historyIndex++;
@@ -347,6 +383,9 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 現在のディレクトリの親へ移動する。
+   */
   #goUp() {
     const current = this.#cwd.value;
     if (current === "/" || !current.includes("/")) return;
@@ -356,6 +395,11 @@ export default class FileManagerApp extends ESKitApp {
     this.#navigateTo(parentPath || "/");
   }
 
+  /**
+   * ディレクトリなら移動し、ファイルなら関連付けアプリで開く。
+   * @param {object} item 開くファイル一覧の項目。
+   * @returns {Promise<void>} 移動要求またはアプリの起動処理が終了したときに解決する。
+   */
   async #handleOpen(item) {
     if (!item) return;
     if (item.type === "dir") {
@@ -365,6 +409,10 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * フォルダー名を確認し、現在のディレクトリ内に作成する。
+   * @returns {Promise<void>} 作成操作の終了時に解決する。
+   */
   async #handleNewFolder() {
     const name = await this.prompt({
       title: this.t("filemanager.newFolder"),
@@ -382,6 +430,10 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * ファイル名を確認し、現在のディレクトリ内に作成する。
+   * @returns {Promise<void>} 作成操作の終了時に解決する。
+   */
   async #handleNewFile() {
     const name = await this.prompt({
       title: this.t("filemanager.newFile"),
@@ -399,10 +451,18 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * ホストのファイル選択ダイアログを開く。
+   */
   #triggerUpload() {
     this.#fileInput?.click();
   }
 
+  /**
+   * ホストのファイル選択結果を VFS へ取り込む。
+   * @param {Event} e ファイル入力の変更イベント。
+   * @returns {Promise<void>} 取込の終了時に解決する。
+   */
   async #onFileInputChange(e) {
     const files = e.target?.files;
     if (!files || files.length === 0) return;
@@ -410,6 +470,11 @@ export default class FileManagerApp extends ESKitApp {
     e.target.value = "";
   }
 
+  /**
+   * ドロップされたホストのファイルを VFS へ取り込む。
+   * @param {DragEvent} e ドロップイベント。
+   * @returns {Promise<void>} 取込の終了時に解決する。
+   */
   async #handleDrop(e) {
     e.preventDefault();
     const files = e.dataTransfer?.files;
@@ -417,6 +482,11 @@ export default class FileManagerApp extends ESKitApp {
     await this.#importHostFiles(files);
   }
 
+  /**
+   * ホストのファイルを現在の VFS ディレクトリへコピーし、一覧を更新する。
+   * @param {FileList} fileList 取り込むホストのファイル。
+   * @returns {Promise<void>} 取込処理の終了時に解決する。
+   */
   async #importHostFiles(fileList) {
     const currentDir = this.#cwd.value === "/" ? "" : this.#cwd.value;
     let count = 0;
@@ -442,6 +512,11 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * VFS のファイルをホストへダウンロードする。
+   * @param {object} item ダウンロードする項目。
+   * @returns {Promise<void>} ダウンロード操作の終了時に解決する。
+   */
   async #handleDownloadFile(item) {
     if (!item || item.type === "dir") return;
     try {
@@ -460,6 +535,11 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 新しい名前を確認し、選択項目を改名して一覧を更新する。
+   * @param {object} item 改名する項目。
+   * @returns {Promise<void>} 改名操作の終了時に解決する。
+   */
   async #handleRename(item) {
     if (!item) return;
     const newName = await this.prompt({
@@ -479,6 +559,11 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 削除を確認し、選択項目を削除して一覧を更新する。
+   * @param {object} item 削除する項目。
+   * @returns {Promise<void>} 削除操作の終了時に解決する。
+   */
   async #handleDelete(item) {
     if (!item) return;
     const ok = await this.confirm({
@@ -498,6 +583,11 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 選択項目のパスやサイズなどの詳細を表示する。
+   * @param {object} item 詳細を表示する項目。
+   * @returns {Promise<void>} 詳細表示の終了時に解決する。
+   */
   async #handleProperties(item) {
     if (!item) return;
     try {
@@ -529,6 +619,11 @@ export default class FileManagerApp extends ESKitApp {
     }
   }
 
+  /**
+   * 項目に応じたファイル操作のコンテキストメニューを表示する。
+   * @param {MouseEvent} e メニューの表示位置を示すイベント。
+   * @param {object} item 操作対象の項目。
+   */
   #showItemContextMenu(e, item) {
     const cm = window.System?.WindowSystem?.contextMenu;
     if (!cm) return;
@@ -579,6 +674,11 @@ export default class FileManagerApp extends ESKitApp {
     cm.show(e.clientX, e.clientY, items);
   }
 
+  /**
+   * 選択した画像の壁紙適用を待ってから、成功を通知する。
+   * @param {object} item 壁紙にするファイル項目。
+   * @returns {Promise<void>} 適用またはエラー表示の終了時に解決する。
+   */
   async #handleSetWallpaper(item) {
     if (!item || item.type === "dir") return;
     try {

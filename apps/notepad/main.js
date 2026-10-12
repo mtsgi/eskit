@@ -12,6 +12,9 @@ export default class NotepadApp extends ESKitApp {
   #content = signal("");
   #isDirty = signal(false);
 
+  /**
+   * エディタのシグナルとツールバー・本文・ステータスの表示を作成する。
+   */
   constructor() {
     super();
     this.name = "Notepad";
@@ -90,20 +93,23 @@ export default class NotepadApp extends ESKitApp {
     `;
   }
 
+  /**
+   * ファイル名と編集状態に連動するタイトル更新を開始する。
+   * 起動時のファイル配送は System.loadApp() に委ねる。
+   */
   initialize() {
     this.#updateTitle();
     this.hamon.effect(() => {
       this.#updateTitle();
     });
 
-    if (this.launchData?.filePath) {
-      this.onOpenFile(this.launchData.filePath);
-    }
+    // 起動時のファイル配送は System.loadApp() が一度だけ行う。
   }
 
   /**
    * ファイルを開く（外部起動・ファイル関連付け・オープン処理共通）
-   * @param {string} filePath
+   * @param {string} filePath 開くファイルの VFS 絶対パス。
+   * @returns {Promise<void>} 読込と表示の完了時に解決する。失敗時はエラーダイアログを表示する。
    */
   async onOpenFile(filePath) {
     if (!filePath) return;
@@ -122,6 +128,9 @@ export default class NotepadApp extends ESKitApp {
     }
   }
 
+  /**
+   * ファイル名、未保存状態、翻訳済みアプリ名からウィンドウタイトルを更新する。
+   */
   #updateTitle() {
     const file = this.#filePath.value ? this.#filePath.value.split("/").pop() : this.t("notepad.untitled");
     const prefix = this.#isDirty.value ? "● " : "";
@@ -129,6 +138,10 @@ export default class NotepadApp extends ESKitApp {
     this.setTitle(`${prefix}${file} - ${appName}`);
   }
 
+  /**
+   * 未保存の変更を確認し、空の新規ドキュメントへ切り替える。
+   * @returns {Promise<void>} 確認と切替の終了時に解決する。
+   */
   async #handleNew() {
     if (this.#isDirty.value) {
       const ok = await this.confirm({
@@ -146,6 +159,10 @@ export default class NotepadApp extends ESKitApp {
     this.#updateTitle();
   }
 
+  /**
+   * 入力された VFS パスのファイルを開く。
+   * @returns {Promise<void>} パス入力とファイル表示の終了時に解決する。
+   */
   async #handleOpen() {
     const defaultPath = this.#filePath.value || (window.System?.homeDir() ? `${window.System.homeDir()}/documents/` : "/home/");
     const inputPath = await this.prompt({
@@ -158,6 +175,10 @@ export default class NotepadApp extends ESKitApp {
     await this.onOpenFile(inputPath.trim());
   }
 
+  /**
+   * 現在のパスへ本文を保存する。パスがなければ名前を付けて保存する。
+   * @returns {Promise<void>} 保存またはエラー表示が終了したときに解決する。
+   */
   async #handleSave() {
     if (!this.#filePath.value) {
       return this.#handleSaveAs();
@@ -181,6 +202,10 @@ export default class NotepadApp extends ESKitApp {
     }
   }
 
+  /**
+   * 保存先のパスを確認し、本文の保存とファイル名表示を更新する。
+   * @returns {Promise<void>} 保存またはエラー表示が終了したときに解決する。
+   */
   async #handleSaveAs() {
     const defaultPath = this.#filePath.value || (window.System?.homeDir() ? `${window.System.homeDir()}/documents/untitled.txt` : "/home/untitled.txt");
     const targetPath = await this.prompt({
@@ -211,6 +236,9 @@ export default class NotepadApp extends ESKitApp {
     }
   }
 
+  /**
+   * 本文をテキストファイルとしてダウンロードし、使用した Blob URL を解放する。
+   */
   #handleDownload() {
     const filename = this.#filePath.value ? this.#filePath.value.split("/").pop() : "document.txt";
     const blob = new Blob([this.#content.value], { type: "text/plain;charset=utf-8" });
@@ -224,6 +252,10 @@ export default class NotepadApp extends ESKitApp {
     URL.revokeObjectURL(url);
   }
 
+  /**
+   * 保存のショートカットと、Tab によるスペース挿入を処理する。
+   * @param {KeyboardEvent} e エディタのキー入力イベント。
+   */
   #onTextareaKeyDown(e) {
     // Ctrl+S / Cmd+S で保存
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {

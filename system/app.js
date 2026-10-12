@@ -26,24 +26,22 @@ export default class ESKitApp {
   /** @type {import('./hamon.js').HamonScope|null} Hamon スコープ (テンプレートまたは手動で設定) */
   _hamonScope    = null;
 
+  /** 静的なアプリ宣言から初期の名前・テンプレート・スタイルを設定する。 */
   constructor() {
     this.name     = this.constructor.name     || "(not_set)";
     this.template = this.constructor.template ?? "";
     this.style    = this.constructor.style    ?? null;
-    // Note: initialize() は ESKitSystem が _windowElement 注入後に呼び出す
+    // initialize() は ESKitSystem が _windowElement を注入した後に呼び出す。
   }
 
   /**
-   * アプリマニフェスト（読み取り専用・イミュータブルコピー）
-   * @returns {Readonly<object>|null}
+   * 全階層を読み取り専用にしたマニフェストのコピーを取得する。
+   * 多言語名や関連付けの配列も、内部マニフェストと参照を共有しない。
+   * @returns {Readonly<object>|null} 独立したコピー。起動前は null。
    */
   get manifest() {
     if (!this._manifest) return null;
-    return Object.freeze({
-      ...this._manifest,
-      icon: this._manifest.icon ? Object.freeze({ ...this._manifest.icon }) : null,
-      permissions: Object.freeze([...(this._manifest.permissions || [])]),
-    });
+    return immutableCopy(this._manifest);
   }
 
   /**
@@ -59,7 +57,12 @@ export default class ESKitApp {
   /** アプリ起動時に呼ばれる。querySelector() 使用可。 */
   initialize() {}
 
-  /** ファイル関連付け等でファイルが開かれたとき @param {string} filePath */
+  /**
+   * ファイル関連付けなどで配送されたファイルを開く。
+   * 起動時は System が一度だけ呼び出し、完了または失敗の捕捉後に app:opened を発行する。
+   * @param {string} _filePath 開くファイルの VFS 絶対パス。
+   * @returns {void|Promise<void>} ファイルの処理が完了したときに解決する。
+   */
   onOpenFile(_filePath) {}
 
   /** アプリ終了時に呼ばれる。タイマー解除などのクリーンアップを実装する。 */
@@ -125,6 +128,10 @@ export default class ESKitApp {
     }
   }
 
+  /**
+   * タイトルを文字列へ変換し、ウィンドウとタスクバーの購読先へ反映する。
+   * @param {*} title 表示するタイトル。
+   */
   #applyTitle(title) {
     const str = String(title ?? "");
     this.name = str;
@@ -283,6 +290,23 @@ export default class ESKitApp {
     }
     return this._hamonScope;
   }
+}
+
+/**
+ * JSON 由来のマニフェスト値を再帰的にコピーし、全階層を凍結する。
+ * オブジェクトや配列の参照を共有せず、プリミティブ値はそのまま返す。
+ *
+ * @param {*} value コピーする値。循環参照のない JSON データを想定する。
+ * @returns {*} 全階層を凍結したコピー、または元のプリミティブ値。
+ */
+function immutableCopy(value) {
+  if (value === null || typeof value !== "object") return value;
+
+  const copy = Array.isArray(value)
+    ? value.map(immutableCopy)
+    : Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, immutableCopy(entry)]));
+
+  return Object.freeze(copy);
 }
 
 /**

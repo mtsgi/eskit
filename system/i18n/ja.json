@@ -27,7 +27,8 @@
     "home": "ホーム / ドロワー",
     "snapAssistTitle": "割り当てるアプリを選択",
     "noAppForFile": "拡張子 \"{ext}\" を開くことができるアプリが見つかりません。",
-    "openFileError": "ファイルを開けません"
+    "openFileError": "ファイルを開けません",
+    "fileReadFailed": "ファイルを読み込めませんでした: {path}"
   },
   "apps": {
     "welcome": {
@@ -124,7 +125,9 @@
   "pwa": {
     "updateTitle": "システムアップデート",
     "updateMessage": "新しいバージョンが利用可能です。再読み込みして適用しますか？",
-    "reload": "再読み込み"
+    "reload": "再読み込み",
+    "updateFailed": "更新を適用できませんでした。もう一度お試しください。",
+    "retry": "再試行"
   },
   "registry": {
     "installConfirmTitle": "外部アプリのインストール",

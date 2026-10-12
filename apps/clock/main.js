@@ -32,6 +32,9 @@ export default class ClockApp extends ESKitApp {
   #swBaseTime = 0;
   #timerInterval = null;
 
+  /**
+   * 時計、ストップウォッチ、タイマーの表示と操作を作成する。
+   */
   constructor() {
     super();
 
@@ -130,8 +133,8 @@ export default class ClockApp extends ESKitApp {
                 <line
                   x1="50" y1="8" x2="50" y2="12"
                   stroke="var(--kit-fg-muted)"
-                  stroke-width=${deg % 90 === 0 ? "2" : "1"}
-                  transform=${`rotate(${deg} 50 50)`}
+                  :stroke-width=${deg % 90 === 0 ? "2" : "1"}
+                  :transform=${`rotate(${deg} 50 50)`}
                 />
               `
             )}
@@ -295,6 +298,9 @@ export default class ClockApp extends ESKitApp {
     `;
   }
 
+  /**
+   * 時計表示を毎秒更新するタイマーを開始する。
+   */
   initialize() {
     // 時計更新インターバル (毎秒)
     this.#clockInterval = setInterval(() => {
@@ -302,6 +308,9 @@ export default class ClockApp extends ESKitApp {
     }, 1000);
   }
 
+  /**
+   * 時計、ストップウォッチ、カウントダウンの更新タイマーを解除する。
+   */
   close() {
     if (this.#clockInterval) clearInterval(this.#clockInterval);
     if (this.#swInterval) clearInterval(this.#swInterval);
@@ -310,6 +319,9 @@ export default class ClockApp extends ESKitApp {
 
   // ─── ストップウォッチ操作 ──────────────────────────────────────────────────
 
+  /**
+   * ストップウォッチの計測開始と一時停止を切り替える。
+   */
   #toggleStopwatch() {
     if (this.#swRunning.value) {
       // 一時停止
@@ -326,12 +338,18 @@ export default class ClockApp extends ESKitApp {
     }
   }
 
+  /**
+   * 計測中の表示時刻をラップ一覧の先頭に追加する。
+   */
   #lapStopwatch() {
     if (!this.#swRunning.value) return;
     const current = this.querySelector(".stopwatch-time")?.textContent || "";
     this.#swLaps.value = [current, ...this.#swLaps.value];
   }
 
+  /**
+   * ストップウォッチを停止し、経過時間とラップを初期化する。
+   */
   #resetStopwatch() {
     this.#swRunning.value = false;
     if (this.#swInterval) clearInterval(this.#swInterval);
@@ -342,10 +360,17 @@ export default class ClockApp extends ESKitApp {
 
   // ─── タイマー操作 ──────────────────────────────────────────────────────────
 
+  /**
+   * 入力された時・分・秒を合計秒数に変換する。
+   * @returns {number} タイマーに設定した秒数。
+   */
   #calcTotalTimerSeconds() {
     return (this.#timerHours.value * 3600) + (this.#timerMinutes.value * 60) + this.#timerSeconds.value;
   }
 
+  /**
+   * カウントダウンの開始と一時停止を切り替える。
+   */
   #toggleTimer() {
     if (this.#timerRunning.value) {
       // 一時停止
@@ -371,12 +396,19 @@ export default class ClockApp extends ESKitApp {
     }
   }
 
+  /**
+   * カウントダウンを停止し、残り時間を設定値に戻す。
+   */
   #resetTimer() {
     this.#timerRunning.value = false;
     if (this.#timerInterval) clearInterval(this.#timerInterval);
     this.#timerRemaining.value = this.#calcTotalTimerSeconds();
   }
 
+  /**
+   * タイマー終了時にアラーム音とシステム通知を発行する。
+   * @returns {Promise<void>} 通知処理の終了時に解決する。
+   */
   async #onTimerFinished() {
     // 1. Web Audio API でアラーム音を再生
     this.#playBeep();
@@ -391,12 +423,21 @@ export default class ClockApp extends ESKitApp {
     });
   }
 
+  /**
+   * Web Audio API で短いアラーム音を再生する。
+   */
   #playBeep() {
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
 
+      /**
+       * 指定した周波数の短音を、開始時刻と長さを決めて再生する。
+       * @param {number} freq 周波数（Hz）。
+       * @param {number} start 現在から再生開始までの秒数。
+       * @param {number} duration 再生する秒数。
+       */
       const playTone = (freq, start, duration) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();

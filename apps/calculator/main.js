@@ -14,6 +14,9 @@ export default class CalculatorApp extends ESKitApp {
   #operator = null;
   #waitingForSecondOperand = false;
 
+  /**
+   * 計算機の表示とボタン操作のテンプレートを作成する。
+   */
   constructor() {
     super();
 
@@ -27,7 +30,7 @@ export default class CalculatorApp extends ESKitApp {
 
         <!-- キーパッド -->
         <div class="calc-keypad">
-          <button class="calc-btn -action" @click=${() => this.#allClear()} title="${() => this.t("calculator.allClear")}">AC</button>
+          <button class="calc-btn -action" @click=${() => this.#allClear()} :title=${() => this.t("calculator.allClear")}>AC</button>
           <button class="calc-btn -action" @click=${() => this.#toggleSign()}>+/-</button>
           <button class="calc-btn -action" @click=${() => this.#percentage()}>%</button>
           <button class="calc-btn -op" @click=${() => this.#setOperator("÷")}>÷</button>
@@ -55,6 +58,9 @@ export default class CalculatorApp extends ESKitApp {
     `;
   }
 
+  /**
+   * 初期フォーカスを設定し、ウィンドウがアクティブな間のキー入力を登録する。
+   */
   initialize() {
     // キーボードフォーカス付与
     setTimeout(() => {
@@ -71,12 +77,19 @@ export default class CalculatorApp extends ESKitApp {
     window.addEventListener("keydown", this._keyHandler);
   }
 
+  /**
+   * グローバルに登録したキー入力の監視を解除する。
+   */
   close() {
     if (this._keyHandler) {
       window.removeEventListener("keydown", this._keyHandler);
     }
   }
 
+  /**
+   * 数値表示に数字を追加する。次の項の入力待ちなら表示を置き換える。
+   * @param {string} digit 入力する数字。
+   */
   #inputDigit(digit) {
     if (this.#waitingForSecondOperand) {
       this.#display.value = digit;
@@ -86,6 +99,9 @@ export default class CalculatorApp extends ESKitApp {
     }
   }
 
+  /**
+   * 小数点を一度だけ追加する。次の項の入力待ちなら 0. から始める。
+   */
   #inputDecimal() {
     if (this.#waitingForSecondOperand) {
       this.#display.value = "0.";
@@ -97,18 +113,28 @@ export default class CalculatorApp extends ESKitApp {
     }
   }
 
+  /**
+   * 表示中の数値の符号を反転する。
+   */
   #toggleSign() {
     const num = parseFloat(this.#display.value);
     if (isNaN(num)) return;
     this.#display.value = String(num * -1);
   }
 
+  /**
+   * 表示中の数値を百分率として 100 で割る。
+   */
   #percentage() {
     const num = parseFloat(this.#display.value);
     if (isNaN(num)) return;
     this.#display.value = String(num / 100);
   }
 
+  /**
+   * 演算子を記録し、必要なら直前の演算を確定する。
+   * @param {string} nextOperator 次に使用する演算子。
+   */
   #setOperator(nextOperator) {
     const inputValue = parseFloat(this.#display.value);
 
@@ -131,6 +157,9 @@ export default class CalculatorApp extends ESKitApp {
     this.#formula.value = `${this.#firstOperand} ${nextOperator}`;
   }
 
+  /**
+   * 入力中の演算を確定し、結果と計算式を表示する。
+   */
   #equals() {
     const inputValue = parseFloat(this.#display.value);
 
@@ -145,6 +174,13 @@ export default class CalculatorApp extends ESKitApp {
     }
   }
 
+  /**
+   * 指定した二つの数値に四則演算を適用する。
+   * @param {number} first 左辺の数値。
+   * @param {number} second 右辺の数値。
+   * @param {string} op 演算子。
+   * @returns {number} 計算結果。ゼロ除算は 0、不明な演算子は右辺の値。
+   */
   #calculate(first, second, op) {
     switch (op) {
       case "+": return first + second;
@@ -157,6 +193,9 @@ export default class CalculatorApp extends ESKitApp {
     }
   }
 
+  /**
+   * 表示と演算状態を初期値に戻す。
+   */
   #allClear() {
     this.#display.value = "0";
     this.#formula.value = "";
@@ -165,6 +204,10 @@ export default class CalculatorApp extends ESKitApp {
     this.#waitingForSecondOperand = false;
   }
 
+  /**
+   * 入力欄以外のキー入力を、計算機の数字・演算操作として処理する。
+   * @param {KeyboardEvent} e キー入力のイベント。
+   */
   #handleKeyDown(e) {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 

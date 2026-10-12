@@ -15,6 +15,7 @@ import ESKitDialogElement      from "./elements/dialog/main.js";
 import ESKitFilePickerElement  from "./elements/file-picker/main.js";
 import ESKitNotificationContainerElement, { ESKitNotificationElement } from "./elements/notification/main.js";
 import { initPWA }             from "./pwa.js";
+import { isDesktopContextMenu, isBeaconShortcut } from "./input.js";
 
 if (!customElements.get("eskit-icon")) {
   customElements.define("eskit-icon", ESKitIconElement);
@@ -343,6 +344,11 @@ export default class ESKitSystem {
 
   // ─── シェル UI ─────────────────────────────────────────────────────────────
 
+  /**
+   * シェル UI をマウントし、背景の右クリックと Beacon のショートカットを登録する。
+   * 入力欄・IME 入力・処理済みイベントの判定は共通の入力ヘルパーに委ねる。
+   * @returns {void}
+   */
   initUI() {
     // 通知コンテナ & ダイアログの初期化マウント
     this.#getNotificationContainer();
@@ -350,12 +356,11 @@ export default class ESKitSystem {
 
     // コンテキストメニュー: デスクトップ右クリック
     window.addEventListener("contextmenu", (e) => {
-      if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
-      if (e.target.closest("eskit-window")) return;
-
-      e.preventDefault();
+      if (!isDesktopContextMenu(e, this.WindowSystem?.desktopElement)) return;
       const cm = this.WindowSystem?.contextMenu;
       if (!cm) return;
+
+      e.preventDefault();
       cm.show(e.clientX, e.clientY, [
         this.shellMode.isMobile
           ? {
@@ -390,8 +395,7 @@ export default class ESKitSystem {
 
     // グローバルキーバインド: Ctrl+Space / Cmd+Space でスポットライト
     window.addEventListener("keydown", (e) => {
-      if (e.code === "Space" && (e.ctrlKey || e.metaKey)) {
-        if (e.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (isBeaconShortcut(e) && this.WindowSystem?.beacon) {
         e.preventDefault();
         this.WindowSystem?.beacon?.toggle();
       }
@@ -402,6 +406,8 @@ export default class ESKitSystem {
 
   /**
    * アプリを起動する。
+   * 起動時のファイル配送を待ってから、現在のウィンドウタイトルで app:opened を発行する。
+   * ファイル配送の失敗は通知し、アプリを保持したまま UUID を返す。
    * @param {string} appDir  末尾スラッシュ付きのディレクトリ (例: "apps/myapp/")
    * @param {object} [options={}]  起動オプション ({ filePath, ... })
    * @returns {Promise<string>}  UUID
@@ -446,15 +452,30 @@ export default class ESKitSystem {
     app._initTitleSync?.();
 
     app.initialize();
+
+    // initialize 側で重ねて配送せず、非同期の読込完了を起動通知より先に待つ。
     if (options.filePath && typeof app.onOpenFile === "function") {
       try {
-        app.onOpenFile(options.filePath);
+        await app.onOpenFile(options.filePath);
       } catch (e) {
         console.warn(`[ESKitSystem] Error during onOpenFile for app ${uuid}:`, e);
+        this.notify({
+          title: this.i18n.t("system.openFileError"),
+          message: this.i18n.t("system.fileReadFailed", { path: options.filePath }),
+          type: "error",
+        });
       }
     }
 
-    this.events.emit("app:opened", { uuid, name: app.name, icon: app._manifest?.icon ?? null, manifest: app._manifest });
+    // ファイル配送待ちの間に終了されたアプリのボタンを復活させない。
+    if (this.getApp(uuid) === app) {
+      this.events.emit("app:opened", {
+        uuid,
+        name: app.windowTitle,
+        icon: app._manifest?.icon ?? null,
+        manifest: app._manifest,
+      });
+    }
 
     return uuid;
   }
@@ -462,7 +483,7 @@ export default class ESKitSystem {
   /**
    * ファイルパスから関連付けられたアプリを特定して起動する。
    * @param {string} filePath VFS 内の絶対パス (例: "/home/admin/desktop/Welcome.txt")
-   * @returns {Promise<string>} 起動したアプリの UUID
+   * @returns {Promise<string|null>} 起動したアプリの UUID。関連付けがない場合は null。
    */
   async openFile(filePath) {
     if (!filePath || typeof filePath !== "string") {

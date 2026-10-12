@@ -356,9 +356,13 @@ export function list(itemsFn, renderFn) {
  * ハイドレーション用のマーカーを埋め込んだ HTML 文字列と
  * バインディングメタデータ (Slot[]) を生成する。
  *
- * @param {TemplateStringsArray} strings
- * @param {any[]} values
- * @returns {{ markup: string, slots: Slot[] }}
+ * 通常属性への補間は HTML として解釈される危険があるため拒否し、
+ * 値全体を渡す :attr・@event・kit-if の形式だけを許可する。
+ *
+ * @param {TemplateStringsArray} strings テンプレートの静的部分。
+ * @param {any[]} values 補間に渡された値。
+ * @returns {{ markup: string, slots: Slot[] }} マーカー付き HTML と補間情報。
+ * @throws {TypeError} タグ名・属性名・引用符付き値・部分属性値などへの補間がある場合。
  */
 function _compileTemplate(strings, values) {
   let markup = "";
@@ -376,8 +380,18 @@ function _compileTemplate(strings, values) {
 
     const attrContext = _detectAttrContext(markup + staticPart);
 
+    // タグの構造を値で変更させず、属性値の直前だけを補間位置として認める。
+    if (attrContext.inTag && (attrContext.state !== "beforeValue" || !attrContext.attrName)) {
+      throw new TypeError("[Hamon] Interpolation inside tags must use a complete :attr=${value}, @event=${handler}, or kit-if=${condition} binding. Dynamic tag/attribute names and quoted/partial attribute values are unsupported.");
+    }
+
     if (attrContext.attrName) {
       const attrName = attrContext.attrName;
+
+      // 補間直後が値の区切りでなければ、接尾辞を含む部分的な属性値になってしまう。
+      if (!/^\s|^>|^\/>/.test(strings[i + 1] || "")) {
+        throw new TypeError("[Hamon] Attribute bindings must occupy the complete, unquoted value. Use :title=${value} instead of title=\"prefix ${value}\".");
+      }
 
       if (attrName.startsWith("@")) {
         // ─ @event バインディング ─
@@ -408,8 +422,7 @@ function _compileTemplate(strings, values) {
         markup += `"${i}"`;
 
       } else {
-        // 通常属性内の補間 → 静的文字列として埋め込む
-        markup += staticPart + _resolveStatic(values[i]);
+        throw new TypeError(`[Hamon] Ordinary attribute interpolation is unsupported. Use :${attrName}=\${value} instead of ${attrName}=\${value}.`);
       }
 
     } else {
@@ -425,22 +438,73 @@ function _compileTemplate(strings, values) {
 /**
  * HTML 文字列の末尾を解析し、現在が属性値の記述位置かどうかを判定する。
  * 属性値記述中 (`=` の直後) であれば属性名を返す。
+ * コメントや引用符付きの静的属性値では、内部の > をタグ終端と扱わない。
  *
  * @param {string} htmlSoFar - これまでに構築した HTML 文字列
- * @returns {{ attrName?: string }}
+ * @returns {{ inTag: boolean, state: string, attrName?: string }} 補間位置の状態と属性名。
  */
 function _detectAttrContext(htmlSoFar) {
-  // 最後の開きタグ位置を探す
-  const lastTagStart = htmlSoFar.lastIndexOf("<");
-  if (lastTagStart === -1) return {};
+  // 値中の > や引用符をタグ終端と誤認しないため、静的マークアップを走査する。
+  let state = "text";
+  let attrName = "";
+  let quote = "";
 
-  const tagSlice = htmlSoFar.slice(lastTagStart);
-  // > があればタグはすでに閉じている → テキストノード内
-  if (tagSlice.includes(">")) return {};
+  for (let i = 0; i < htmlSoFar.length; i++) {
+    const c = htmlSoFar[i];
 
-  // タグ内で最後に現れた `属性名=` パターンを探す
-  const attrMatch = tagSlice.match(/(\S+)\s*=\s*$/);
-  return attrMatch ? { attrName: attrMatch[1] } : {};
+    if (state === "comment") {
+      if (htmlSoFar.startsWith("-->", i)) {
+        state = "text";
+        i += 2;
+      }
+    } else if (state === "text") {
+      if (htmlSoFar.startsWith("<!--", i)) {
+        state = "comment";
+        i += 3;
+      } else if (c === "<") {
+        state = "tagName";
+      }
+    } else if (state === "quoted") {
+      if (c === quote) state = "beforeAttr";
+    } else if (state === "unquoted") {
+      if (c === ">") state = "text";
+      else if (/\s/.test(c)) state = "beforeAttr";
+    } else if (state === "beforeValue") {
+      if (/\s/.test(c)) continue;
+
+      if (c === '"' || c === "'") {
+        quote = c;
+        state = "quoted";
+      } else {
+        state = c === ">" ? "text" : "unquoted";
+      }
+    } else if (c === ">") {
+      state = "text";
+    } else if (state === "tagName") {
+      if (/\s/.test(c)) state = "beforeAttr";
+    } else if (state === "beforeAttr") {
+      if (/\s/.test(c) || c === "/") continue;
+
+      attrName = c;
+      state = "attrName";
+    } else if (state === "attrName") {
+      if (c === "=") state = "beforeValue";
+      else if (/\s/.test(c)) state = "afterAttr";
+      else attrName += c;
+    } else if (state === "afterAttr") {
+      if (c === "=") state = "beforeValue";
+      else if (!/\s/.test(c)) {
+        attrName = c;
+        state = "attrName";
+      }
+    }
+  }
+
+  return {
+    inTag: state !== "text",
+    state,
+    attrName: state === "beforeValue" ? attrName : undefined,
+  };
 }
 
 /**
@@ -450,18 +514,6 @@ function _detectAttrContext(htmlSoFar) {
  */
 function _escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * 静的コンテキスト (属性内など) で値を文字列として解決する。
- * Signal / 関数は評価して現在値を返す。
- * @param {*} value
- * @returns {string}
- */
-function _resolveStatic(value) {
-  if (typeof value === "function") return value();
-  if (isSignal(value)) return value.peek();
-  return value ?? "";
 }
 
 /**

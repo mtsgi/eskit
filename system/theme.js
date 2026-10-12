@@ -14,10 +14,12 @@ export default class ESKitTheme {
   #wallpaper = "";
   #blobUrl = null;
   #resolvedWallpaper = "";
+  #wallpaperRevision = 0; // 壁紙の解決処理の世代。新しい選択があれば古い完了結果を破棄する。
   #importedThemes = new Map(); // id -> ThemeMeta
   #styleEl = null;
   #mediaQuery = null;
 
+  /** OS のカラーモードを監視し、auto モードの外観更新を登録する。 */
   constructor() {
     this.#mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     this.#mediaQuery.addEventListener("change", () => {
@@ -30,22 +32,27 @@ export default class ESKitTheme {
 
   // ─── ゲッター ────────────────────────────────────────────────────────────
 
+  /** @returns {"light"|"dark"|"auto"} 現在のカラーモード。 */
   get mode() {
     return this.#mode;
   }
 
+  /** @returns {string} 選択中のテーマ ID。 */
   get current() {
     return this.#themeId;
   }
 
+  /** @returns {string} カスタム壁紙、または選択中のテーマの壁紙。 */
   get wallpaper() {
     return this.#wallpaper || this.getTheme(this.#themeId)?.wallpaper || "";
   }
 
+  /** @returns {string} Blob URL などに解決済みの壁紙の CSS 値。未解決時は元の値。 */
   get resolvedWallpaper() {
     return this.#resolvedWallpaper || this.wallpaper;
   }
 
+  /** @returns {boolean} モード・テーマ指定・OS 設定から決めたダーク表示の状態。 */
   get isDark() {
     if (this.#mode === "dark") return true;
     if (this.#mode === "light") return false;
@@ -57,16 +64,19 @@ export default class ESKitTheme {
     return this.#mediaQuery?.matches ?? true;
   }
 
+  /** @returns {object[]} 組み込みテーマとインポート済みテーマの一覧。 */
   get list() {
     const builtin = THEME_PRESETS.map(t => ({ ...t, builtin: true }));
     const imported = [...this.#importedThemes.values()].map(t => ({ ...t, builtin: false }));
     return [...builtin, ...imported];
   }
 
+  /** @returns {object[]} 選択可能な壁紙プリセットの一覧。 */
   get wallpapers() {
     return WALLPAPER_PRESETS;
   }
 
+  /** @returns {Record<string, string>} テーマ変数にカスタム変数を重ねた現在値。 */
   get vars() {
     const theme = this.getTheme(this.#themeId);
     return {
@@ -78,7 +88,8 @@ export default class ESKitTheme {
   // ─── 初期化と永続化 ────────────────────────────────────────────────────────
 
   /**
-   * 起動時およびログイン時の初期化
+   * 起動時・ログイン時に設定を読み込み、壁紙の解決後に外観へ反映する。
+   * @returns {Promise<void>} 読込と反映の終了時に解決する。新しい壁紙処理が始まった場合は反映を省略する。
    */
   async init() {
     this.#ensureStyleElement();
@@ -105,7 +116,7 @@ export default class ESKitTheme {
       }
     }
 
-    await this.#resolveWallpaper();
+    if (!await this.#resolveWallpaper()) return;
     this.#applyToDOM();
     this.#emitChange();
   }
@@ -168,8 +179,9 @@ export default class ESKitTheme {
   }
 
   /**
-   * プリセットまたはインポート済みテーマを適用する
-   * @param {string} id
+   * プリセットまたはインポート済みテーマを、壁紙の解決後に適用する。
+   * @param {string} id 適用するテーマの ID。
+   * @returns {Promise<void>} 外観への反映後に解決する。新しい壁紙処理が始まった場合は反映を省略する。
    */
   async apply(id) {
     const theme = this.getTheme(id);
@@ -181,7 +193,7 @@ export default class ESKitTheme {
     if (theme.wallpaper && !this.#wallpaper) {
       // テーマ独自の壁紙があれば反映
     }
-    await this.#resolveWallpaper();
+    if (!await this.#resolveWallpaper()) return;
     this.#applyToDOM();
     this.#emitChange();
     this.save();
@@ -205,12 +217,13 @@ export default class ESKitTheme {
   }
 
   /**
-   * 壁紙を設定する
+   * 壁紙を設定し、VFS の画像読込が必要な場合はその完了を待って反映する。
    * @param {string} value CSS background 値 (linear-gradient(...), url(...), #hex) または VFS パス (/home/...)
+   * @returns {Promise<void>} 外観への反映後に解決する。新しい壁紙処理が始まった場合は反映を省略する。
    */
   async setWallpaper(value) {
     this.#wallpaper = value;
-    await this.#resolveWallpaper();
+    if (!await this.#resolveWallpaper()) return;
     this.#applyToDOM();
     this.#emitChange();
     this.save();
@@ -299,6 +312,7 @@ export default class ESKitTheme {
 
   // ─── DOM 適用とイベント ──────────────────────────────────────────────────
 
+  /** テーマ変数を書き込む style 要素を取得し、なければ作成する。 */
   #ensureStyleElement() {
     if (!this.#styleEl) {
       this.#styleEl = document.getElementById("eskit-theme-vars");
@@ -310,6 +324,7 @@ export default class ESKitTheme {
     }
   }
 
+  /** 現在のテーマ変数・カラーモード・解決済み壁紙を DOM に反映する。 */
   #applyToDOM() {
     this.#ensureStyleElement();
 
@@ -342,6 +357,7 @@ export default class ESKitTheme {
     }
   }
 
+  /** 現在の外観と解決済み壁紙を、設定画面などの購読先へ通知する。 */
   #emitChange() {
     window.System?.events?.emit("system:theme-changed", {
       id: this.#themeId,
@@ -353,6 +369,11 @@ export default class ESKitTheme {
     });
   }
 
+  /**
+   * 壁紙の値が VFS の絶対パスか判定する。
+   * @param {*} val 壁紙として指定された値。
+   * @returns {boolean} VFS の絶対パスの場合は true。
+   */
   #isVfsPath(val) {
     if (!val || typeof val !== "string") return false;
     const trimmed = val.trim();
@@ -364,6 +385,11 @@ export default class ESKitTheme {
     );
   }
 
+  /**
+   * 画像ファイルの拡張子から Blob 用の MIME タイプを求める。
+   * @param {string} filePath 画像ファイルのパス。
+   * @returns {string} 対応する MIME タイプ。不明な拡張子は image/png。
+   */
   #getMimeType(filePath) {
     const ext = filePath.includes(".") ? filePath.split(".").pop().toLowerCase() : "";
     switch (ext) {
@@ -379,12 +405,23 @@ export default class ESKitTheme {
     }
   }
 
+  /**
+   * 現在の壁紙を CSS で使える値に解決し、不要になった Blob URL を解放する。
+   * VFS の読込完了順が逆転しても、最新世代の処理だけが結果を更新する。
+   * @returns {Promise<boolean>} 最新の選択を解決した場合は true。古い処理の場合は false。
+   */
   async #resolveWallpaper() {
+    const revision = ++this.#wallpaperRevision;
     const raw = this.#wallpaper || this.getTheme(this.#themeId)?.wallpaper || "";
+
     if (this.#isVfsPath(raw) && window.System?.fs) {
       try {
         if (await window.System.fs.exists(raw)) {
           const bytes = await window.System.fs.readFileAsBytes(raw);
+
+          // 古い読込結果では Blob URL を作らず、最新の選択とその URL を保持する。
+          if (revision !== this.#wallpaperRevision) return false;
+
           const mime = this.#getMimeType(raw);
           const blob = new Blob([bytes], { type: mime });
           if (this.#blobUrl) {
@@ -392,7 +429,7 @@ export default class ESKitTheme {
           }
           this.#blobUrl = URL.createObjectURL(blob);
           this.#resolvedWallpaper = `url("${this.#blobUrl}")`;
-          return;
+          return true;
         } else {
           console.warn(`[ESKitTheme] VFS wallpaper file not found: ${raw}, falling back to theme default.`);
         }
@@ -401,13 +438,24 @@ export default class ESKitTheme {
       }
     }
 
+    if (revision !== this.#wallpaperRevision) return false;
+
+    // CSS の壁紙や既定値に戻す場合も、前の画像の Blob URL は不要になる。
     if (this.#blobUrl) {
       URL.revokeObjectURL(this.#blobUrl);
       this.#blobUrl = null;
     }
-    this.#resolvedWallpaper = raw && !this.#isVfsPath(raw) ? raw : (this.getTheme(this.#themeId)?.wallpaper || "");
+    this.#resolvedWallpaper = raw && !this.#isVfsPath(raw)
+      ? raw
+      : (this.getTheme(this.#themeId)?.wallpaper || "");
+    return true;
   }
 
+  /**
+   * インポートするテーマの必須項目と CSS 変数名を検証する。
+   * @param {object} json 検証するテーマ定義。
+   * @throws {Error} 必須項目または CSS 変数の名前空間が不正な場合。
+   */
   #validateThemeJson(json) {
     if (!json || typeof json !== "object") {
       throw new Error("Invalid theme format: Expected JSON object");

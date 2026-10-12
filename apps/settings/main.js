@@ -11,6 +11,9 @@ import style from "./style.js";
 export default class SettingsApp extends ESKitApp {
   static style = style;
 
+  /**
+   * 設定値のシグナル、システムとの同期、設定画面のテンプレートを作成する。
+   */
   constructor() {
     super();
     this.name = "設定";
@@ -62,6 +65,9 @@ export default class SettingsApp extends ESKitApp {
       permissionsVersion.value++;
     });
 
+    /**
+     * 設定画面が購読したテーマ・言語・プロセス・通知・権限のイベントを解除する。
+     */
     this.onCloseCleanup = () => {
       offTheme?.();
       offLocale?.();
@@ -73,19 +79,38 @@ export default class SettingsApp extends ESKitApp {
     };
 
     // ─── アクションハンドラー ───────────────────────────────────────────────
+    /**
+     * カラーモードを変更し、選択表示を更新する。
+     * @param {"light"|"dark"|"auto"} mode 選択したモード。
+     */
     const handleSetMode = (mode) => {
       window.System?.theme?.setMode(mode);
       currentMode.value = mode;
     };
 
-    const handleApplyTheme = (id) => {
-      window.System?.theme?.apply(id);
-      currentThemeId.value = id;
+    /**
+     * テーマと壁紙の解決を待ち、サービスの現在値でプレビューを更新する。
+     * @param {string} id 選択したテーマの ID。
+     * @returns {Promise<void>} 適用とプレビュー更新の終了時に解決する。
+     */
+    const handleApplyTheme = async (id) => {
+      await window.System?.theme?.apply(id);
+
+      // 読込中に別の選択があった場合も、サービスが採用した最新値を表示する。
+      currentThemeId.value = window.System?.theme?.current || id;
+      resolvedWallpaperBg.value = window.System?.theme?.resolvedWallpaper || "";
     };
 
     const isCustomWallpaper = computed(() => {
       const wp = currentWallpaper.value;
-      return Boolean(wp && wp.startsWith("/") && !wp.startsWith("linear-gradient") && !wp.startsWith("radial-gradient") && !wp.startsWith("url("));
+
+      return Boolean(
+        wp &&
+        wp.startsWith("/") &&
+        !wp.startsWith("linear-gradient") &&
+        !wp.startsWith("radial-gradient") &&
+        !wp.startsWith("url(")
+      );
     });
 
     const customWallpaperName = computed(() => {
@@ -94,27 +119,47 @@ export default class SettingsApp extends ESKitApp {
       return wp.split("/").pop();
     });
 
-    const handleSetWallpaper = (val) => {
-      window.System?.theme?.setWallpaper(val);
-      currentWallpaper.value = val;
+    /**
+     * 壁紙の解決を待ち、採用された壁紙とプレビューを更新する。
+     * @param {string} val 壁紙の CSS 値または VFS パス。
+     * @returns {Promise<void>} 適用とプレビュー更新の終了時に解決する。
+     */
+    const handleSetWallpaper = async (val) => {
+      await window.System?.theme?.setWallpaper(val);
+
+      currentWallpaper.value = window.System?.theme?.wallpaper || "";
       resolvedWallpaperBg.value = window.System?.theme?.resolvedWallpaper || "";
     };
 
+    /**
+     * ファイル選択後に画像を壁紙へ適用する。キャンセル時は変更しない。
+     * @returns {Promise<void>} ファイル選択と壁紙適用の終了時に解決する。
+     */
     const handlePickWallpaper = async () => {
       const pickedPath = await this.showOpenFilePicker({
         title: this.t("settings.appearance.chooseWallpaperFile") || "壁紙画像を選択",
         accepts: [".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif", ".bmp"],
       });
+
       if (pickedPath) {
-        handleSetWallpaper(pickedPath);
+        await handleSetWallpaper(pickedPath);
       }
     };
 
+    /**
+     * 表示言語の切替を待ち、設定画面の選択表示を更新する。
+     * @param {string} lang 言語コード。
+     * @returns {Promise<void>} 言語切替の終了時に解決する。
+     */
     const handleSetLocale = async (lang) => {
       await window.System?.i18n?.setLocale(lang);
       currentLocale.value = lang;
     };
 
+    /**
+     * 指定 URL からテーマをインポートし、結果を通知またはダイアログで表示する。
+     * @returns {Promise<void>} インポート操作の終了時に解決する。
+     */
     const handleImportTheme = async () => {
       const url = importUrl.value.trim();
       if (!url) return;
@@ -135,6 +180,10 @@ export default class SettingsApp extends ESKitApp {
       }
     };
 
+    /**
+     * テーマ設定をクリップボードへコピーし、利用できない場合は文字列を表示する。
+     * @returns {Promise<void>} エクスポート操作の終了時に解決する。
+     */
     const handleExportTheme = async () => {
       const json = window.System?.theme?.export();
       if (!json) return;
@@ -154,6 +203,10 @@ export default class SettingsApp extends ESKitApp {
       }
     };
 
+    /**
+     * 通知機能を確認するためのサンプル通知を表示する。
+     * @returns {Promise<void>} 通知処理の終了時に解決する。
+     */
     const handleSendTestNotification = async () => {
       await this.showNotification({
         title: this.t("notifications.sampleTitle"),
@@ -163,10 +216,18 @@ export default class SettingsApp extends ESKitApp {
       });
     };
 
+    /**
+     * 保存された通知履歴を消去する。
+     */
     const handleClearNotifications = () => {
       window.System?.notifications?.clear();
     };
 
+    /**
+     * ユーザーの確認後に、指定したプロセスの終了を要求する。
+     * @param {string} procUuid 終了するアプリの UUID。
+     * @returns {Promise<void>} 確認と終了要求の終了時に解決する。
+     */
     const handleKillProcess = async (procUuid) => {
       const confirmed = await this.confirm({
         title: this.t("settings.systemTab.confirmKillTitle"),
@@ -178,6 +239,13 @@ export default class SettingsApp extends ESKitApp {
       }
     };
 
+    /**
+     * 確認後にアプリの一つの権限を取り消し、一覧の更新を促す。
+     * @param {string} appId 対象アプリの ID。
+     * @param {string} perm 取り消す権限名。
+     * @param {string} appName 確認に表示するアプリ名。
+     * @returns {Promise<void>} 取消操作の終了時に解決する。
+     */
     const handleRevokeSinglePermission = async (appId, perm, appName) => {
       const permName = window.System?.i18n?.getPermissionDescription(perm) || perm;
       const confirmed = await this.confirm({
@@ -194,11 +262,23 @@ export default class SettingsApp extends ESKitApp {
       }
     };
 
+    /**
+     * アプリの権限を許可または拒否へ設定し、一覧の更新を促す。
+     * @param {string} appId 対象アプリの ID。
+     * @param {string} perm 変更する権限名。
+     * @param {boolean} granted 許可する場合は true、拒否する場合は false。
+     */
     const handleSetPermissionDirect = (appId, perm, granted) => {
       window.System?.permissions?.grant(appId, perm, granted);
       permissionsVersion.value++;
     };
 
+    /**
+     * 確認後にアプリの全権限を取り消し、一覧の更新を促す。
+     * @param {string} appId 対象アプリの ID。
+     * @param {string} appName 呼出元から渡されるアプリ名（現在は未使用）。
+     * @returns {Promise<void>} 取消操作の終了時に解決する。
+     */
     const handleRevokeAllPermissions = async (appId, appName) => {
       const confirmed = await this.confirm({
         title: this.t("settings.permissionsTab.confirmRevokeTitle"),
@@ -211,6 +291,10 @@ export default class SettingsApp extends ESKitApp {
       }
     };
 
+    /**
+     * 登録済み・起動中のアプリをまとめ、要求権限を表示する一覧を作成する。
+     * @returns {object[]} 権限を要求するアプリの一覧。
+     */
     const getAppPermissionsList = () => {
       // 依存性 tracker として permissionsVersion を参照
       const _ = permissionsVersion.value;
@@ -417,7 +501,7 @@ export default class SettingsApp extends ESKitApp {
                 <input
                   class="kit-textbox kit-flex-fit"
                   type="url"
-                  placeholder=${this.t("settings.appearance.importPlaceholder")}
+                  :placeholder=${this.t("settings.appearance.importPlaceholder")}
                   :value=${() => importUrl.value}
                   @input=${(e) => importUrl.value = e.target.value}
                 >
@@ -507,7 +591,7 @@ export default class SettingsApp extends ESKitApp {
                 <tbody>
                   ${list(() => notificationsList.value, (item) => hamon`
                     <tr>
-                      <td><eskit-icon set="lucide" name=${item.icon || (item.type === "success" ? "check-circle" : item.type === "error" ? "alert-circle" : "info")} size="14"></eskit-icon></td>
+                      <td><eskit-icon set="lucide" :name=${item.icon || (item.type === "success" ? "check-circle" : item.type === "error" ? "alert-circle" : "info")} size="14"></eskit-icon></td>
                       <td><strong>${item.title}</strong></td>
                       <td>${item.message}</td>
                       <td>${() => window.System?.i18n?.formatTime(item.time) || new Date(item.time).toLocaleTimeString()}</td>
@@ -605,7 +689,7 @@ export default class SettingsApp extends ESKitApp {
                     <div class="perm-app-section">
                       <div class="perm-app-header">
                         <div class="perm-app-info">
-                          <eskit-icon set="lucide" name=${app.icon?.name || "box"} size="18"></eskit-icon>
+                          <eskit-icon set="lucide" :name=${app.icon?.name || "box"} size="18"></eskit-icon>
                           <div>
                             <span class="perm-app-name">${() => app.name}</span>
                             <span class="perm-app-id"> (${() => app.id})</span>
@@ -615,7 +699,7 @@ export default class SettingsApp extends ESKitApp {
                         <button
                           class="kit-button -small -alt"
                           @click=${() => handleRevokeAllPermissions(app.id, app.name)}
-                          title=${this.t("settings.permissionsTab.revokeAll")}
+                          :title=${this.t("settings.permissionsTab.revokeAll")}
                         >
                           <eskit-icon set="lucide" name="rotate-ccw" size="12"></eskit-icon>
                           <span>${() => this.t("settings.permissionsTab.revokeAll")}</span>
@@ -648,7 +732,7 @@ export default class SettingsApp extends ESKitApp {
                                     class="kit-button -small -alt"
                                     kit-if=${() => state() !== "granted"}
                                     @click=${() => handleSetPermissionDirect(app.id, perm, true)}
-                                    title=${this.t("settings.permissionsTab.allowSingle")}
+                                    :title=${this.t("settings.permissionsTab.allowSingle")}
                                   >
                                     <eskit-icon set="lucide" name="check" size="12"></eskit-icon>
                                   </button>
@@ -656,7 +740,7 @@ export default class SettingsApp extends ESKitApp {
                                     class="kit-button -small -alt"
                                     kit-if=${() => state() !== "denied"}
                                     @click=${() => handleSetPermissionDirect(app.id, perm, false)}
-                                    title=${this.t("settings.permissionsTab.denySingle")}
+                                    :title=${this.t("settings.permissionsTab.denySingle")}
                                   >
                                     <eskit-icon set="lucide" name="x" size="12"></eskit-icon>
                                   </button>
@@ -664,7 +748,7 @@ export default class SettingsApp extends ESKitApp {
                                     class="kit-button -small -danger"
                                     kit-if=${() => state() !== "unprompted"}
                                     @click=${() => handleRevokeSinglePermission(app.id, perm, app.name)}
-                                    title=${this.t("settings.permissionsTab.revokeSingle")}
+                                    :title=${this.t("settings.permissionsTab.revokeSingle")}
                                   >
                                     <eskit-icon set="lucide" name="trash-2" size="12"></eskit-icon>
                                     <span>${() => this.t("settings.permissionsTab.revokeSingle")}</span>
@@ -686,6 +770,9 @@ export default class SettingsApp extends ESKitApp {
     `;
   }
 
+  /**
+   * 設定画面のタイトルを現在の言語で表示し、翻訳の変更に追従させる。
+   */
   initialize() {
     this.setTitle(this.t("settings.title"));
     this.hamon.effect(() => {
@@ -693,6 +780,9 @@ export default class SettingsApp extends ESKitApp {
     });
   }
 
+  /**
+   * システム状態の変更を監視する購読を解除する。
+   */
   close() {
     this.onCloseCleanup?.();
   }

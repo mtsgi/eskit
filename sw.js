@@ -39,6 +39,7 @@ const PRECACHE_URLS = [
   "./system/elements/file-picker/style.js",
   "./system/themes/presets.js",
   "./system/pwa.js",
+  "./system/input.js",
   "./apps/filemanager/i18n/ja.json",
   "./apps/filemanager/i18n/en.json",
   "./apps/notepad/i18n/ja.json",
@@ -53,6 +54,11 @@ const PRECACHE_URLS = [
 
 // ─── Install ────────────────────────────────────────────────────────────────
 
+/**
+ * 起動に必要なリソースを個別にキャッシュするインストール処理。
+ * 更新版は skipWaiting() を呼ばず、ユーザーの適用操作まで待機させる。
+ * @param {ExtendableEvent} event インストールイベント。
+ */
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
@@ -66,12 +72,14 @@ self.addEventListener("install", (event) => {
       );
     })
   );
-  // 新しい SW の即時待機解除
-  self.skipWaiting();
 });
 
 // ─── Activate ───────────────────────────────────────────────────────────────
 
+/**
+ * 古いキャッシュを削除してから、開いているクライアントの制御を取得する。
+ * @param {ExtendableEvent} event 有効化イベント。
+ */
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -88,6 +96,10 @@ self.addEventListener("activate", (event) => {
 
 // ─── Fetch (Network-First) ──────────────────────────────────────────────────
 
+/**
+ * ネットワークから取得し、失敗時はキャッシュ済みの応答へ切り替える。
+ * @param {FetchEvent} event リソース取得イベント。
+ */
 self.addEventListener("fetch", (event) => {
   const req = event.request;
 
@@ -132,8 +144,13 @@ self.addEventListener("fetch", (event) => {
 
 // ─── Message Handling ───────────────────────────────────────────────────────
 
+/**
+ * タブからの明示的な更新指示を受け取り、待機中の更新の有効化を開始する。
+ * @param {ExtendableMessageEvent} event クライアントからのメッセージ。
+ */
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
+    // 待機解除の Promise が終了するまで Service Worker の処理寿命を延ばす。
+    event.waitUntil(self.skipWaiting());
   }
 });

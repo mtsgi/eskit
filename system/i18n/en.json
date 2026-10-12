@@ -27,7 +27,8 @@
     "home": "Home / Drawer",
     "snapAssistTitle": "Select an App to Snap",
     "noAppForFile": "No application found to open file with extension \"{ext}\".",
-    "openFileError": "Cannot Open File"
+    "openFileError": "Cannot Open File",
+    "fileReadFailed": "Could not read file: {path}"
   },
   "apps": {
     "welcome": {
@@ -124,7 +125,9 @@
   "pwa": {
     "updateTitle": "System Update",
     "updateMessage": "A new version of ESKit is available. Reload now to apply updates?",
-    "reload": "Reload"
+    "reload": "Reload",
+    "updateFailed": "The update could not be applied. Please retry.",
+    "retry": "Retry"
   },
   "registry": {
     "installConfirmTitle": "Install External App",
