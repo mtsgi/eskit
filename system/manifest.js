@@ -10,11 +10,16 @@ export default class ESKitManifest {
   static #VALID_PERMISSIONS = new Set([
     "fs.read",
     "fs.write",
+    "fs.read.all",
+    "fs.write.all",
+    "fs.shared",
     "notifications",
     "ipc",
     "network",
     "system.info",
     "clipboard",
+    "user.info",
+    "user.manage",
   ]);
 
   /**

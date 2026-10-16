@@ -9,13 +9,24 @@ export default css`
     inset: 0;
     z-index: 10000;
     background: var(--eskit-overlay-bg, rgba(0, 0, 0, 0.45));
-    justify-content: center;
-    align-items: flex-start;
-    padding-top: 4rem;
+    justify-content: flex-start;
+    align-items: flex-end;
+    padding-bottom: var(--eskit-taskbar-height, 48px);
+    padding-left: var(--kit-space-s);
   }
 
   :host([open]) {
     display: flex;
+  }
+
+  @keyframes launcher-in {
+    from { opacity: 0; transform: translateY(1rem); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes launcher-out {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(1rem); }
   }
 
   :host([mode="mobile"]) {
@@ -29,10 +40,15 @@ export default css`
     border: 1px solid var(--eskit-color-border);
     border-radius: var(--kit-radius-m);
     width: min(32rem, calc(100vw - 2rem));
-    max-height: calc(100dvh - 8rem);
+    max-height: calc(100dvh - var(--eskit-taskbar-height, 48px) - 4rem);
     overflow-y: auto;
     overscroll-behavior: contain;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    animation: launcher-in 0.2s ease-out;
+  }
+
+  :host(.is-closing) .launcher-panel {
+    animation: launcher-out 0.2s ease-in forwards;
   }
 
   /* ─── ヘッダー (検索) ──────────────────────────────────────── */

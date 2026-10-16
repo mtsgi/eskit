@@ -79,7 +79,7 @@ export default class ESKitPermissions {
     if (manifest) {
       const stored = this.#loadStored(manifest.id);
       stored[permission] = granted;
-      localStorage.setItem(`eskit-perm-${manifest.id}`, JSON.stringify(stored));
+      localStorage.setItem(this.#storageKey(manifest.id), JSON.stringify(stored));
     }
   }
 
@@ -107,10 +107,18 @@ export default class ESKitPermissions {
 
   #loadStored(appId) {
     try {
-      return JSON.parse(localStorage.getItem(`eskit-perm-${appId}`) ?? "{}");
+      return JSON.parse(localStorage.getItem(this.#storageKey(appId)) ?? "{}");
     } catch {
       return {};
     }
+  }
+
+  #storageKey(appId) {
+    const user = window.System?.currentUser;
+    if (!user) {
+      throw new Error(`[ESKitPermissions] Cannot resolve storage key without an active user session`);
+    }
+    return `eskit-perm-${user.id}-${appId}`;
   }
 
   /**

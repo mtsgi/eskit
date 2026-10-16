@@ -22,8 +22,11 @@ ESKitSystem (window.System)
 └── WindowSystem: ESKitWindowSystem    ウィンドウ管理
     ├── eskit-desktop                  デスクトップ要素
     ├── eskit-window                   ウィンドウ要素
-    ├── eskit-taskbar                  タスクバー (Phase 3)
-    └── eskit-launcher                 アプリランチャー
+    ├── eskit-taskbar                  タスクバー
+    ├── eskit-launcher                 アプリランチャー
+    ├── eskit-context-menu             右クリックコンテキストメニュー
+    ├── eskit-beacon                   グローバル検索オーバーレイ
+    └── eskit-quick-settings           クイック設定パネル
 ```
 
 ### 起動シーケンス
@@ -137,18 +140,20 @@ export default css`
 |--------|------------|------|------|
 | TestApp | `apps/test/` | 開発用テスト | ✅ |
 | WelcomeApp | `apps/welcome/` | ようこそ画面 | ✅ |
-| Settings | `apps/settings/` | テーマ・言語・権限管理 | Phase 4 |
-| Notepad | `apps/notepad/` | テキストエディタ (仮想 FS 対応) | Phase 5 |
-| Calculator | `apps/calculator/` | 電卓 | Phase 5 |
-| Clock | `apps/clock/` | 時計 / ストップウォッチ / タイマー | Phase 5 |
-| File Manager | `apps/filemanager/` | 仮想 FS ブラウザ | Phase 5 |
+| Settings | `apps/settings/` | テーマ・言語・権限管理 | Phase 5 |
+| Notepad | `apps/notepad/` | テキストエディタ (仮想 FS 対応) | Phase 6 |
+| Calculator | `apps/calculator/` | 電卓 | Phase 6 |
+| Clock | `apps/clock/` | 時計 / ストップウォッチ / タイマー | Phase 6 |
+| File Manager | `apps/filemanager/` | 仮想 FS ブラウザ | Phase 6 |
 
 ## ロードマップ
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | 🛠️ 実装済み |
-| 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | 予定 |
-| 3 | デスクトップシェル (タスクバー / ランチャー / コンテキストメニュー) | 予定 |
-| 4 | システムサービス (通知 / テーマ / i18n / 設定アプリ) | 予定 |
-| 5 | 開発者体験 (サンプルアプリ / 外部インストール) | 予定 |
+| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | ✅ 実装済み |
+| 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | ✅ 実装済み |
+| 3 | デスクトップシェル (コンテキストメニュー / グローバル検索 / クイック設定) | ✅ 実装済み |
+| 3.5 | Hamon リアクティブテンプレートエンジン | ✅ 実装済み |
+| 4 | ユーザー基盤 (ログイン / ユーザー分離 / 権限分離) | 🚧 着手中 |
+| 5 | システムサービス (通知 / テーマ / i18n / 設定アプリ) | 予定 |
+| 6 | 開発者体験 (サンプルアプリ / 外部インストール) | 予定 |

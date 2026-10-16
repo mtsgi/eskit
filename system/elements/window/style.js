@@ -14,6 +14,24 @@ export default css`
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     min-width: 220px;
     min-height: 120px;
+    /* ─── 開閉アニメーション ──────────────────────────── */
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity var(--kit-transition-normal) ease,
+                transform var(--kit-transition-normal) ease;
+  }
+
+  @starting-style {
+    :host {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :host {
+      transition: none;
+    }
   }
 
   :host(.focused) {

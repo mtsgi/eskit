@@ -37,6 +37,8 @@ export default class ESKitLauncherElement extends HTMLElement {
 
   /** ランチャーを開く (内容をリフレッシュしてから表示) */
   show() {
+    // 閉じるアニメーション中に再度開く場合はキャンセル
+    this.classList.remove("is-closing");
     this.#refresh();
     this.setAttribute("open", "");
     // 検索ボックスにフォーカス
@@ -47,9 +49,17 @@ export default class ESKitLauncherElement extends HTMLElement {
     }
   }
 
-  /** ランチャーを閉じる */
+  /** ランチャーを閉じる (退場アニメーション後に非表示) */
   hide() {
-    this.removeAttribute("open");
+    if (!this.isOpen || this.classList.contains("is-closing")) return;
+    this.classList.add("is-closing");
+    const panel = this.shadowRoot.querySelector(".launcher-panel");
+    const done = () => {
+      this.removeAttribute("open");
+      this.classList.remove("is-closing");
+      panel?.removeEventListener("animationend", done);
+    };
+    panel?.addEventListener("animationend", done, { once: true });
   }
 
   /** ランチャーの開閉をトグルする */

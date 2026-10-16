@@ -33,6 +33,16 @@ export default css`
     flex: 1;
   }
 
+  .section-header {
+    padding: 0.2rem 0.7rem;
+    font-size: var(--kit-font-size-xs);
+    font-weight: var(--kit-font-weight-bold);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    list-style: none;
+    color: var(--kit-fg-secondary);
+  }
+
   .result {
     display: grid;
     grid-template-columns: 1.2rem 1fr auto;

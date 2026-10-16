@@ -69,6 +69,11 @@ export default class ESKitTaskbarElement extends HTMLElement {
       window.System?.events.emit("launcher:toggle");
     });
 
+    // 時計クリック → クイック設定パネル
+    this.shadowRoot.getElementById("clock").addEventListener("click", () => {
+      window.System?.WindowSystem?.quickSettings?.toggle();
+    });
+
     const sys = window.System;
     if (!sys) return;
 

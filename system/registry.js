@@ -93,12 +93,12 @@ export default class ESKitRegistry {
   }
 
   /**
-   * 外部 URL からアプリをインストールする。(Phase 5 で実装)
+   * 外部 URL からアプリをインストールする。(Phase 6 で実装)
    * @param {string} _url  HTTPS URL (例: "https://example.com/myapp/")
    * @returns {Promise<Manifest>}
    */
   async registerFromUrl(_url) {
-    throw new Error("[ESKitRegistry] registerFromUrl is not yet implemented (Phase 5)");
+    throw new Error("[ESKitRegistry] registerFromUrl is not yet implemented (Phase 6)");
   }
 
   #normalizeDir(dir) {
