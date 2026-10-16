@@ -129,7 +129,7 @@ export default class ESKitSystem {
   }
 
   async #registerBuiltinApps() {
-    const builtin = ["apps/test/", "apps/welcome/"];
+    const builtin = ["apps/test/", "apps/welcome/", "apps/eskish/"];
     for (const dir of builtin) {
       try {
         await this.registry.register(dir);
@@ -142,10 +142,14 @@ export default class ESKitSystem {
   // ─── シェルモード ──────────────────────────────────────────────────────────
 
   /**
-   * シェルモードを明示的に切り替える。
-   * @param {"desktop"|"mobile"} mode
+   * シェルモードを明示的に切り替える。"auto" の場合は自動検出に復帰する。
+   * @param {"desktop"|"mobile"|"auto"} mode
    */
   setShellMode(mode) {
+    if (mode === "auto") {
+      this.shellMode.unlock();
+      return;
+    }
     this.shellMode.set(mode);
   }
 

@@ -21,7 +21,7 @@ System.getApp(uuid);                          // アプリインスタンスを�
 System.listProcesses();                       // [{uuid, name, state}, ...]
 System.notify({ title, message, duration });  // notification:show イベントを発行
 System.sendMessage(targetUuid, data);         // アプリ間 IPC
-System.setShellMode("desktop" | "mobile");   // シェルモードを手動切替
+System.setShellMode("desktop" | "mobile" | "auto"); // シェルモード切替 ("auto" で自動検出復帰)
 System.nextZIndex();                          // フォーカス用 z-index を取得 (呼ぶたびに増加)
 System.generateUUID();                        // crypto.randomUUID() のラッパー
 System.currentUser;                           // 現在ログイン中ユーザー ({id, name, isAdmin, createdAt} | null)
@@ -96,7 +96,7 @@ System.shellMode.set("mobile"); // 手動でモードを設定 (MediaQuery 自�
 System.shellMode.unlock();      // 自動検出を再開し、ビューポートに応じたモードに戻す
 ```
 
-モード変更時は `"shell:mode-changed"` イベントが発行されます。`System.setShellMode()` は `shellMode.set()` の便利なショートハンドです。
+モード変更時は `"shell:mode-changed"` イベントが発行されます。`System.setShellMode()` は `shellMode.set()` / `shellMode.unlock()` ("auto" 指定時) の便利なショートハンドです。
 
 | モード | 説明 |
 |--------|------|
@@ -759,3 +759,40 @@ export default class MyApp extends ESKitApp {
 - `this.hamon` は `HamonScope` インスタンスを遅延生成して返す
 - テンプレートに `DocumentFragment` を設定すると、ウィンドウシステムが自動判定して DOM 挿入する
 - アプリ終了時 (`closeApp`) に `_hamonScope.dispose()` が自動呼び出しされ、全 effect が解除される
+
+---
+
+## `ESKish` — ターミナルアプリ
+
+ESKit 標準の組み込みターミナル環境 (`apps/eskish/`) です。EcmaScript / ESKit API 風の独自コマンド体系により、仮想ファイルシステムやプロセス、セッションを直感的に操作できます。
+
+### コマンドリファレンス
+
+| コマンド | 短縮形 | 引数 | 説明 | 要求権限 |
+|---------|-------|------|------|---------|
+| `readFile` | `cat` | `<path>` | ファイルをテキストとして読み取り表示 | `fs.read` |
+| `writeFile` | `write` | `<path> <text...>` | ファイルにテキストを書き込み | `fs.write` |
+| `readDir` | `ls`, `dir` | `[path]` | ディレクトリ内のファイル・ディレクトリ一覧 | `fs.read` |
+| `makeDir` | `mkdir` | `<path>` | ディレクトリを作成 (再帰対応) | `fs.write` |
+| `remove` | `rm` | `<path>` | ファイルまたはディレクトリを再帰的削除 | `fs.write` |
+| `rename` | `mv` | `<from> <to>` | ファイル・ディレクトリのリネーム / 移動 | `fs.write` |
+| `stat` | — | `<path>` | ファイル / ディレクトリの詳細情報を表示 | `fs.read` |
+| `changeDir` | `cd` | `[path]` | カレントディレクトリを変更 (`~`, `..` 対応) | `fs.read` |
+| `currentDir` | `pwd` | — | 現在の作業ディレクトリを表示 | (なし) |
+| `listProcesses` | `ps` | — | 実行中のプロセス一覧を表示 | `system.info` |
+| `listApps` | `apps` | — | 登録済みアプリ一覧を表示 | (なし) |
+| `loadApp` | `open` | `<appDir\|appId>` | 指定アプリを起動 | (なし) |
+| `closeApp` | `kill` | `<uuid>` | 指定アプリを終了 | (なし) |
+| `focusApp` | `focus` | `<uuid\|prefix>` | 指定アプリウィンドウを最前面にフォーカス | (なし) |
+| `sendMessage` | `send` | `<uuid\|prefix> <msg>` | プロセスへ IPC メッセージを送信 (JSON自動判定) | `ipc` |
+| `currentUser` | `whoami` | — | 現在ログイン中のユーザー情報を表示 | `user.info` |
+| `listUsers` | `users` | — | 登録済みユーザー一覧を表示 | `user.info` |
+| `logout` | — | — | ログアウトしてログイン画面へ戻る | (なし) |
+| `systemInfo` | `sysinfo` | — | OS・ユーザー・画面解像度等のサマリを表示 | (なし) |
+| `setShellMode` | `mode` | `[mode]` | シェルモード取得または変更 (`desktop`/`mobile`/`auto`) | (なし) |
+| `history` | — | — | コマンド実行履歴を番号付きで表示 | (なし) |
+| `notify` | — | `<title> [message]` | システム通知を発行 | `notifications` |
+| `eval` | `js` | `<code...>` | 現在のコンテキスト (`this`, `System`) で JS 式を実行 | (実行内容に準拠) |
+| `clear` | `cls` | — | ターミナル画面を消去 | (なし) |
+| `help` | `?` | — | 利用可能なコマンド一覧と説明を表示 | (なし) |
+
