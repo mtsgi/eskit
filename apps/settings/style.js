@@ -249,6 +249,36 @@ export default css`
     box-shadow: 0 0 0 2px var(--eskit-color-primary, #1e8fff), 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
+  .wallpaper-card.-add {
+    border: 2px dashed var(--eskit-color-border, var(--kit-border-color, #404060));
+    background: var(--kit-bg-secondary, rgba(255, 255, 255, 0.03));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--kit-fg-muted, #aaa);
+    transition: all 0.2s ease;
+  }
+
+  .wallpaper-card.-add:hover {
+    border-color: var(--kit-color-primary, #1e8fff);
+    color: var(--kit-color-primary, #1e8fff);
+    background: rgba(30, 143, 255, 0.08);
+  }
+
+  .wallpaper-add-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    text-align: center;
+  }
+
+  .wallpaper-add-text {
+    font-size: var(--kit-font-size-xs, 11px);
+    font-weight: 500;
+  }
+
   .wallpaper-label {
     position: absolute;
     bottom: 0;
@@ -372,6 +402,37 @@ export default css`
   }
 
   /* ─── レスポンシブ ────────────────────────────────────────── */
+
+  @container (max-width: 540px) {
+    .settings-layout {
+      flex-direction: column;
+    }
+    .sidebar {
+      width: 100%;
+      flex-direction: row;
+      border-right: none;
+      border-bottom: 1px solid var(--eskit-color-border, var(--kit-border-color, #404060));
+      overflow-x: auto;
+      padding: 6px 8px;
+    }
+    .nav-btn {
+      width: auto;
+      white-space: nowrap;
+      padding: 6px 10px;
+    }
+    .content-pane {
+      padding: 12px;
+    }
+    .mode-selector {
+      grid-template-columns: 1fr;
+    }
+    .theme-grid {
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    }
+    .wallpaper-grid {
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+  }
 
   @media (max-width: 600px) {
     .settings-layout {

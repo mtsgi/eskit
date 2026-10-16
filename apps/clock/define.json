@@ -1,0 +1,20 @@
+{
+  "id": "eskit.clock",
+  "name": {
+    "ja": "時計",
+    "en": "Clock"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "description": {
+    "ja": "世界時計・ストップウォッチ・タイマー",
+    "en": "World clock, stopwatch, and timer"
+  },
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "clock"
+  },
+  "permissions": ["notifications"],
+  "i18n": "./i18n/"
+}

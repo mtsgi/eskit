@@ -1,8 +1,14 @@
 {
   "id": "eskit.settings",
-  "name": "設定",
+  "name": {
+    "ja": "設定",
+    "en": "Settings"
+  },
   "version": "1.0.0",
-  "description": "ESKit システム設定（外観・言語・通知・システム・権限）",
+  "description": {
+    "ja": "ESKit システム設定（外観・言語・通知・システム・権限）",
+    "en": "ESKit system settings (Appearance, Language, Notifications, System, Permissions)"
+  },
   "entry": "main.js",
   "icon": {
     "type": "set",
@@ -10,7 +16,7 @@
     "name": "settings"
   },
   "window": {
-    "title": "設定",
+    "title": "settings.title",
     "width": 780,
     "height": 560,
     "minWidth": 480,

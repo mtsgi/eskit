@@ -1,5 +1,12 @@
 import hamon from "system/hamon.js";
 
+/**
+ * クイック設定パネルをリアクティブなテンプレートとして生成する。
+ * 動的な属性値は :attr で渡し、翻訳結果を HTML の構造として解釈させない。
+ *
+ * @param {import("system/hamon.js").HamonScope} scope 呼出元から渡されるスコープ（現在は未使用）。
+ * @returns {DocumentFragment} 表示用のフラグメント。
+ */
 export default (scope) => hamon`
   <div class="quick-settings" popover="manual" id="panel">
     <div class="qs-header">
@@ -7,7 +14,7 @@ export default (scope) => hamon`
         <eskit-icon set="lucide" name="sliders" size="14"></eskit-icon>
         <span id="qs-title-text">${() => window.System?.i18n?.t("system.quickSettings") || "クイック設定"}</span>
       </span>
-      <button class="kit-button -small -flat" id="open-settings-btn" title=${() => window.System?.i18n?.t("system.openSettings") || "設定を開く"}>
+      <button class="kit-button -small -flat" id="open-settings-btn" :title=${() => window.System?.i18n?.t("system.openSettings") || "設定を開く"}>
         <eskit-icon set="lucide" name="settings" size="14"></eskit-icon>
       </button>
     </div>
@@ -53,13 +60,13 @@ export default (scope) => hamon`
           <span id="qs-theme-label">${() => window.System?.i18n?.t("settings.tabs.appearance") || "テーマ"}</span>
         </span>
         <div class="kit-buttongroup" id="theme-mode-group">
-          <button class="kit-button -small theme-mode-btn" data-theme-mode="auto" title=${() => window.System?.i18n?.t("settings.appearance.auto") || "OS連動"}>
+          <button class="kit-button -small theme-mode-btn" data-theme-mode="auto" :title=${() => window.System?.i18n?.t("settings.appearance.auto") || "OS連動"}>
             <eskit-icon set="lucide" name="sparkles" size="12"></eskit-icon>
           </button>
-          <button class="kit-button -small theme-mode-btn" data-theme-mode="light" title=${() => window.System?.i18n?.t("settings.appearance.light") || "ライト"}>
+          <button class="kit-button -small theme-mode-btn" data-theme-mode="light" :title=${() => window.System?.i18n?.t("settings.appearance.light") || "ライト"}>
             <eskit-icon set="lucide" name="sun" size="12"></eskit-icon>
           </button>
-          <button class="kit-button -small theme-mode-btn" data-theme-mode="dark" title=${() => window.System?.i18n?.t("settings.appearance.dark") || "ダーク"}>
+          <button class="kit-button -small theme-mode-btn" data-theme-mode="dark" :title=${() => window.System?.i18n?.t("settings.appearance.dark") || "ダーク"}>
             <eskit-icon set="lucide" name="moon" size="12"></eskit-icon>
           </button>
         </div>

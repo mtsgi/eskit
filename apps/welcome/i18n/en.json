@@ -1,0 +1,6 @@
+{
+  "name": "Welcome",
+  "description": "Welcome app introducing ESKit features and usage",
+  "title": "Welcome to ESKit",
+  "subtitle": "ESKit is a Web OS built with modern web standards, Web Components, and the Hamon reactive engine."
+}

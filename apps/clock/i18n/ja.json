@@ -1,0 +1,15 @@
+{
+  "tabClock": "時計",
+  "tabStopwatch": "ストップウォッチ",
+  "tabTimer": "タイマー",
+  "start": "開始",
+  "pause": "一時停止",
+  "resume": "再開",
+  "reset": "リセット",
+  "lap": "ラップ",
+  "lapNum": "ラップ {num}",
+  "timerFinished": "タイマーが終了しました！",
+  "hours": "時間",
+  "minutes": "分",
+  "seconds": "秒"
+}

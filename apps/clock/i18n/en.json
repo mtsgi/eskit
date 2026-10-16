@@ -1,0 +1,15 @@
+{
+  "tabClock": "Clock",
+  "tabStopwatch": "Stopwatch",
+  "tabTimer": "Timer",
+  "start": "Start",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "lap": "Lap",
+  "lapNum": "Lap {num}",
+  "timerFinished": "Timer finished!",
+  "hours": "Hours",
+  "minutes": "Mins",
+  "seconds": "Secs"
+}

@@ -13,6 +13,7 @@ export default class ESKitI18n {
   #revision = signal(0);
   #dictionaries = new Map(); // lang -> dict object
   #available = ["ja", "en"];
+  #appDictionaries = new Map(); // appId -> { appDir, i18nPath, shortId }
 
   constructor() {
     // 初期の言語自動検出 (navigator.language)
@@ -56,6 +57,7 @@ export default class ESKitI18n {
       }
     }
 
+    this.#revision.value++;
     this.#emitChange();
   }
 
@@ -96,6 +98,7 @@ export default class ESKitI18n {
         if (!this.#available.includes(lang)) {
           this.#available.push(lang);
         }
+        this.#revision.value++;
       } else {
         console.warn(`[ESKitI18n] Could not load dictionary for "${lang}": ${res.status}`);
       }
@@ -113,8 +116,65 @@ export default class ESKitI18n {
       await this.load(lang);
     }
     this.locale.value = lang;
+
+    // 登録中アプリの対象言語辞書をロード
+    await Promise.allSettled(
+      [...this.#appDictionaries.values()].map(async ({ appDir, i18nPath, shortId }) => {
+        try {
+          const dir = appDir.endsWith("/") ? appDir : appDir + "/";
+          let rel = (i18nPath || "./i18n/").replace(/^\.\//, "");
+          if (!rel.endsWith("/")) rel += "/";
+          const url = new URL(`${dir}${rel}${lang}.json`, window.location.href);
+          const res = await fetch(url);
+          if (res.ok) {
+            const dict = await res.json();
+            this.extend(shortId, lang, dict);
+          }
+        } catch {
+          // ignore missing dictionary
+        }
+      })
+    );
+
+    this.#revision.value++;
     this.#emitChange();
     await this.save();
+  }
+
+  /**
+   * アプリ固有の言語辞書を読み込む
+   * @param {string} appDir 例: "apps/notepad/"
+   * @param {string} appId 例: "eskit.notepad"
+   * @param {string} [i18nPath="./i18n/"]
+   */
+  async loadAppDictionary(appDir, appId, i18nPath = "./i18n/") {
+    if (!appDir || !appId) return;
+    const shortId = appId.replace(/^eskit\./, "").replace(/^apps\//, "").replace(/\/$/, "");
+    this.#appDictionaries.set(appId, { appDir, i18nPath, shortId });
+
+    const dir = appDir.endsWith("/") ? appDir : appDir + "/";
+    let rel = (i18nPath || "./i18n/").replace(/^\.\//, "");
+    if (!rel.endsWith("/")) rel += "/";
+
+    const currentLang = this.locale.value;
+    const langsToLoad = [currentLang];
+    if (currentLang !== "en") langsToLoad.push("en");
+    if (currentLang !== "ja" && !langsToLoad.includes("ja")) langsToLoad.push("ja");
+
+    await Promise.allSettled(
+      langsToLoad.map(async (lang) => {
+        try {
+          const url = new URL(`${dir}${rel}${lang}.json`, window.location.href);
+          const res = await fetch(url);
+          if (res.ok) {
+            const dict = await res.json();
+            this.extend(shortId, lang, dict);
+          }
+        } catch {
+          // ignore missing app dictionary
+        }
+      })
+    );
   }
 
   /**
@@ -135,6 +195,12 @@ export default class ESKitI18n {
     if (val === undefined && currentLang !== "en") {
       const enDict = this.#dictionaries.get("en");
       val = this.#getNested(enDict, key);
+    }
+
+    // 英語でも見つからない場合、日本語辞書 (ベース言語) をフォールバック
+    if (val === undefined && currentLang !== "ja") {
+      const jaDict = this.#dictionaries.get("ja");
+      val = this.#getNested(jaDict, key);
     }
 
     // 見つからない場合はキー名を返す
@@ -198,31 +264,70 @@ export default class ESKitI18n {
 
   /**
    * マニフェストから多言語化されたアプリ名を取得する
-   * @param {{ id: string, name: string }} manifest
+   * @param {{ id: string, name: string|Record<string, string> }} manifest
+   * @param {string} [lang=this.locale.value] 対象ロケール (省略時は現在ロケール)
    * @returns {string}
    */
-  getAppName(manifest) {
+  getAppName(manifest, lang = this.locale.value) {
     if (!manifest) return "";
     const id = manifest.id || "";
-    // "eskit.welcome" -> "welcome", "eskit.settings" -> "settings", "apps/test/" -> "test"
     const shortId = id.replace(/^eskit\./, "").replace(/^apps\//, "").replace(/\/$/, "");
+    const currentLang = lang || this.locale.value;
+
+    // 1. manifest.name が多言語オブジェクトの場合
+    if (typeof manifest.name === "object" && manifest.name !== null) {
+      if (manifest.name[currentLang]) return manifest.name[currentLang];
+      if (manifest.name.en) return manifest.name.en;
+      const first = Object.values(manifest.name)[0];
+      if (first) return String(first);
+    }
+
+    // 2. 辞書 (apps.{shortId}.name) から取得
     const dictKey = `apps.${shortId}.name`;
+    const dict = this.#dictionaries.get(currentLang);
+    const val = this.#getNested(dict, dictKey);
+    if (val && typeof val === "string") return val;
+
+    // 3. フォールバック: t()
     const translated = this.t(dictKey);
-    return translated !== dictKey ? translated : (manifest.name || id);
+    if (translated !== dictKey) return translated;
+
+    // 4. 文字列フォールバック
+    return typeof manifest.name === "string" ? manifest.name : id;
   }
 
   /**
    * マニフェストから多言語化されたアプリ説明文を取得する
-   * @param {{ id: string, description?: string }} manifest
+   * @param {{ id: string, description?: string|Record<string, string> }} manifest
+   * @param {string} [lang=this.locale.value] 対象ロケール (省略時は現在ロケール)
    * @returns {string}
    */
-  getAppDescription(manifest) {
+  getAppDescription(manifest, lang = this.locale.value) {
     if (!manifest) return "";
     const id = manifest.id || "";
     const shortId = id.replace(/^eskit\./, "").replace(/^apps\//, "").replace(/\/$/, "");
+    const currentLang = lang || this.locale.value;
+
+    // 1. manifest.description が多言語オブジェクトの場合
+    if (typeof manifest.description === "object" && manifest.description !== null) {
+      if (manifest.description[currentLang]) return manifest.description[currentLang];
+      if (manifest.description.en) return manifest.description.en;
+      const first = Object.values(manifest.description)[0];
+      if (first) return String(first);
+    }
+
+    // 2. 辞書 (apps.{shortId}.description) から取得
     const dictKey = `apps.${shortId}.description`;
+    const dict = this.#dictionaries.get(currentLang);
+    const val = this.#getNested(dict, dictKey);
+    if (val && typeof val === "string") return val;
+
+    // 3. フォールバック: t()
     const translated = this.t(dictKey);
-    return translated !== dictKey ? translated : (manifest.description || "");
+    if (translated !== dictKey) return translated;
+
+    // 4. 文字列フォールバック
+    return typeof manifest.description === "string" ? manifest.description : "";
   }
 
   /**

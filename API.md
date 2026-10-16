@@ -568,7 +568,7 @@ await this.fs.rename(oldPath, newPath)// リネーム/移動 (permissions: "fs.w
 | プロパティ | 説明 |
 |----------|------|
 | `this.name` | アプリ表示名 (コンストラクタクラス名、または `setTitle()` で変更) |
-| `this.manifest` | 読み取り専用・イミュータブルな `Manifest` オブジェクト |
+| `this.manifest` | 全階層をコピー・freezeした読み取り専用 `Manifest`。多言語名・配列なども内部参照を共有しない |
 | `this._uuid` | アプリ固有の UUID |
 | `this._manifest` | `define.json` から読み込まれた Manifest (内部用) |
 | `this._state` | `"running"`, `"minimized"`, `"maximized"`, `"closed"` |
@@ -746,6 +746,19 @@ scope dispose 時に `removeEventListener` が自動呼び出しされる。
 
 #### 属性バインディング `:attr`
 
+動的な属性値は必ず `:attr=${value}` の形式で指定します。`title=${value}`、
+`title="${value}"`、`class="prefix ${value}"` はコンパイル時に `TypeError` になります。
+属性名・タグ名の補間、引用符付き／部分的なバインディングも非対応です。
+静的な `title="text"` は引き続き使用できます。
+
+```js
+// 移行前: hamon`<div class="line ${type}" title=${title}></div>`
+hamon`<div :class=${() => `line ${type.value}`} :title=${title}></div>`;
+```
+
+属性値はDOMのプロパティまたは `setAttribute` で設定され、HTMLとして再解析されません。
+これは属性注入の防止であり、危険なURLやイベント属性など任意の属性値の安全性を保証するものではありません。
+
 ```html
 <input :value=${() => name.value} :disabled=${() => locked.value}>
 <div :class=${() => active.value ? "on" : "off"}>
@@ -887,9 +900,9 @@ System.theme.vars;        // 現在適用されている全 CSS 変数マップ
 System.theme.wallpaper;   // 現在の壁紙 CSS 値
 
 System.theme.setMode("dark");                  // カラーモードを変更 ("light" | "dark" | "auto")
-System.theme.apply("nord");                    // プリセットテーマを適用
+await System.theme.apply("nord");              // プリセットテーマを適用
 System.theme.applyVars({ "--kit-color-primary": "#e63946" }); // カスタム CSS 変数を直接適用
-System.theme.setWallpaper("radial-gradient(...)"); // 壁紙を変更
+await System.theme.setWallpaper("/home/admin/Pictures/my-wall.png"); // VFS パスまたは CSS 値で壁紙を変更 (Blob URL 自動生成)
 await System.theme.load("https://example.com/theme.json"); // 外部 URL からテーマを fetch・インポート
 System.theme.reset();                          // デフォルトテーマにリセット
 const jsonStr = System.theme.export();         // 現在のテーマ設定を JSON 出力
@@ -970,6 +983,16 @@ const buttonId = await System.dialog.custom({
     { id: "save", label: "保存", primary: true },
   ],
 });
+
+// 5. 汎用ファイル選択ダイアログ (File Picker)
+const filePath = await System.dialog.showOpenFilePicker({
+  title: "画像を選択",
+  startPath: "/home/admin/Pictures",
+  accepts: [".png", ".jpg", ".jpeg", ".webp", ".svg"],
+});
+if (filePath) {
+  console.log("Selected file:", filePath);
+}
 ```
 
 ---
@@ -997,5 +1020,129 @@ System.notifications.clear();        // 履歴をすべて消去
 3. **通知 (Notifications):** 通知履歴（Notification Center）の閲覧・消去、テスト通知送信
 4. **システム (System):** OS バージョン・ユーザー・シェルモード等のシステムサマリ、実行中プロセス一覧と強制終了
 5. **権限 (Permissions):** 実行中アプリの要求権限一覧の確認と個別取り消し
+
+---
+
+## `ファイル関連付け & 起動引数` (Phase 6)
+
+### `System.openFile(filePath)`
+ファイルパスの拡張子から対応するアプリを自動検出し、ファイルパスを渡して起動します。
+
+```js
+await System.openFile("/home/alice/desktop/Welcome.txt"); // Notepad が起動してファイルが開く
+```
+
+### `define.json` での拡張子宣言
+```json
+{
+  "id": "eskit.notepad",
+  "name": "Notepad",
+  "entry": "main.js",
+  "fileAssociations": [".txt", ".md", ".json", ".js", ".css", ".html"]
+}
+```
+
+### アプリ側でのファイルオープン受信
+```js
+export default class NotepadApp extends ESKitApp {
+  initialize() {
+    // UIの初期化のみ。filePathの配送はSystemが一度だけ行う。
+  }
+
+  // 関連付け・オープン用ライフサイクルフック
+  async onOpenFile(filePath) {
+    const text = await this.fs.readFile(filePath);
+    // ファイル内容の読み込みと表示
+  }
+}
+```
+
+`loadApp()` は `initialize()` の後に `onOpenFile()` の完了を待ち、`app:opened` を発行します。
+読み込みに失敗した場合は翻訳済みのエラー通知を表示し、アプリを残してUUIDを返します。
+`openFile()` は `Promise<string|null>` を返し、対応アプリがない場合はダイアログ表示後に `null` を返します。
+タスクバーには現在のウィンドウタイトルが反映され、言語変更でファイル名を上書きしません。
+
+---
+
+## `PWA & Service Worker` (Phase 6)
+
+ESKit は PWA (Progressive Web Apps) として設計されており、ブラウザへのインストールとオフライン実行に対応しています。
+
+- **`manifest.webmanifest`**: 相対 `start_url: "./index.html"` および `scope: "./"` を指定し、ルートおよびサブディレクトリ（GitHub Pages 等）への配置に対応。
+- **`sw.js`**: **Network-First** 戦略を採用。オンライン時は常に最新コードを即時反映し、オフライン・通信障害時はキャッシュからレスポンス。
+- **`system/pwa.js`**: Service Worker の更新を監視し、新規バージョン検知時にユーザーへ再読み込み通知トーストを表示。
+
+更新SWは待機し、通知の「再読み込み」を選んだタブで `SKIP_WAITING` を送信します。
+対象SWへの制御切替を確認してから、一度だけ再読み込みします。初回インストールと他タブの更新では自動再読み込みしません。
+通知は待機中SWごとに一度、操作するまで表示されます。送信失敗・SW失効・30秒の待機超過では
+再読み込みせずエラーと再試行ボタンを表示します。保存していない編集内容は再読み込み前に保存してください。
+
+壁紙・テーマの適用は非同期です。呼び出し側は `await System.theme.setWallpaper(value)` /
+`await System.theme.apply(id)` の後に `resolvedWallpaper` を参照してください。
+処理が競合した場合は最新の選択を保持し、古い処理の完了で上書きしません。
+
+---
+
+## `標準サンプルアプリ` (Phase 6)
+
+| アプリ | ディレクトリ | 説明 | 主な機能 |
+|--------|------------|------|---------|
+| **Notepad** | `apps/notepad/` | テキスト/コードエディタ | VFS 読込・保存・別名保存・PCダウンロード・行/文字数カウント・変更検知・Ctrl+S 保存・拡張子関連付け |
+| **電卓 (Calculator)** | `apps/calculator/` | 四則演算電卓 | 8桁高精度四則演算・数式表示・符号反転・パーセント・キーボード操作対応 (0-9, +-*/, Enter, Esc) |
+| **時計 (Clock)** | `apps/clock/` | 世界時計/ストップウォッチ/タイマー | SVG アナログ時計・デジタル時計・ミリ秒ストップウォッチ・ラップ記録・カウントダウンタイマー (Web Audio アラーム & 通知) |
+| **ファイル (FileManager)** | `apps/filemanager/` | 仮想 FS マネージャー | 階層ナビゲーション・サイドバーショートカット・フォルダ/ファイル作成・リネーム・削除・PCからのファイル導入 (Upload/Drag&Drop)・PCへの保存 (Download)・コンテキストメニュー |
+
+---
+
+## `アプリ多言語化 (App i18n) & マニフェスト拡張` (Phase 6)
+
+### 多言語対応マニフェスト (`define.json`)
+`name` および `description` に言語別オブジェクト（`Record<string, string>`）を指定可能です。後方互換性のため文字列指定も継続してサポートされます。また、アプリ固有の辞書ディレクトリ（`"i18n": "./i18n/"`）を指定できます。
+
+```json
+{
+  "id": "eskit.notepad",
+  "name": {
+    "ja": "メモ帳",
+    "en": "Notepad"
+  },
+  "description": {
+    "ja": "シンプルなテキスト・コードエディタ",
+    "en": "Simple text and code editor"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "i18n": "./i18n/"
+}
+```
+
+### アプリ固有の翻訳辞書 (`apps/*/i18n/{lang}.json`)
+アプリディレクトリ内に各言語の JSON 辞書を配置します。
+
+```json
+// apps/notepad/i18n/ja.json
+{
+  "file": "ファイル",
+  "save": "保存",
+  "unsaved": "未保存の変更があります"
+}
+```
+
+### アプリ内での翻訳利用 (`this.t()`)
+`ESKitApp` クラスの `this.t(key, vars)` は、アプリ自身の名前空間（例: `notepad.file`）およびグローバルシステム辞書を透過的に解決します。
+
+```js
+// 短縮キー、フルキーのどちらでも利用可能
+this.t("save");          // => "保存" (apps/notepad/i18n/ja.json)
+this.t("notepad.save");  // => "保存"
+```
+
+### ウィンドウタイトルの自動同期 & リアクティブ更新
+アプリはマニフェスト名および言語設定（`System.i18n.locale`）に応じたウィンドウタイトルを自動的に同期します。アプリ固有のタイトルを設定する場合、文字列に加えて Hamon シグナルや getter 関数を渡すことで、リアクティブなタイトル同期が可能です。
+
+```js
+// 動的なリアクティブタイトル
+this.setTitle(() => `${this.filePath.value || "Untitled"} - ${this.t("notepad.name")}`);
+```
 
 

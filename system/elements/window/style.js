@@ -14,6 +14,9 @@ export default css`
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     min-width: 220px;
     min-height: 120px;
+    max-width: calc(100vw - 8px);
+    max-height: calc(100vh - var(--eskit-taskbar-height, 48px) - 8px);
+    container-type: inline-size;
     /* ─── 開閉アニメーション ──────────────────────────── */
     opacity: 1;
     transform: scale(1);
@@ -179,8 +182,12 @@ export default css`
 
   .app-template {
     flex: 1;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     background: var(--eskit-color-surface, var(--eskit-color-background));
   }
 

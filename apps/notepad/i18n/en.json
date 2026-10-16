@@ -1,0 +1,21 @@
+{
+  "new": "New",
+  "open": "Open",
+  "save": "Save",
+  "saveAs": "Save As",
+  "download": "Save to PC",
+  "untitled": "Untitled.txt",
+  "lines": "lines",
+  "chars": "chars",
+  "saved": "File saved successfully",
+  "savePrompt": "Enter destination path:",
+  "openPrompt": "Enter path to open:",
+  "fileNotFound": "File not found: {path}",
+  "confirmDiscardTitle": "New Document",
+  "confirmDiscardMsg": "Changes have not been saved. Create a new document anyway?",
+  "discardAndNew": "Discard and Create New",
+  "cancel": "Cancel",
+  "saveError": "Failed to save file: {error}",
+  "openError": "Failed to open file: {error}",
+  "modified": "Modified"
+}

@@ -1,9 +1,15 @@
 {
   "id": "eskit.test",
-  "name": "System Verifier",
+  "name": {
+    "ja": "System Verifier",
+    "en": "System Verifier"
+  },
   "entry": "main.js",
   "version": "1.0.0",
-  "description": "ESKit システム機能の網羅的な検証アプリ",
+  "description": {
+    "ja": "ESKit システム機能の網羅的な検証アプリ",
+    "en": "Comprehensive test suite for ESKit system features"
+  },
   "icon": {
     "type": "set",
     "set": "lucide",

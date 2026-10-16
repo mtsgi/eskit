@@ -83,14 +83,44 @@ export default class ESKitManifest {
       }
     }
 
+    const fileAssociations = Array.isArray(obj.fileAssociations)
+      ? obj.fileAssociations.map((ext) => (String(ext).startsWith(".") ? String(ext).toLowerCase() : "." + String(ext).toLowerCase()))
+      : [];
+
+    let normalizedName;
+    if (typeof obj.name === "object" && obj.name !== null && !Array.isArray(obj.name)) {
+      normalizedName = {};
+      for (const [k, v] of Object.entries(obj.name)) {
+        normalizedName[k] = String(v);
+      }
+    } else {
+      normalizedName = String(obj.name);
+    }
+
+    let normalizedDescription = "";
+    if (obj.description !== undefined && obj.description !== null) {
+      if (typeof obj.description === "object" && !Array.isArray(obj.description)) {
+        normalizedDescription = {};
+        for (const [k, v] of Object.entries(obj.description)) {
+          normalizedDescription[k] = String(v);
+        }
+      } else {
+        normalizedDescription = String(obj.description);
+      }
+    }
+
+    const i18n = typeof obj.i18n === "string" ? obj.i18n : "./i18n/";
+
     return {
-      id:          String(obj.id),
-      name:        String(obj.name),
-      entry:       String(obj.entry),
-      icon:        normalizedIcon,
-      version:     obj.version     ? String(obj.version)     : "0.0.1",
-      description: obj.description ? String(obj.description) : "",
+      id:               String(obj.id),
+      name:             normalizedName,
+      entry:            String(obj.entry),
+      icon:             normalizedIcon,
+      version:          obj.version     ? String(obj.version)     : "0.0.1",
+      description:      normalizedDescription,
       permissions,
+      fileAssociations,
+      i18n,
     };
   }
 }

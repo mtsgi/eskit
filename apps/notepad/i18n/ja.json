@@ -1,0 +1,21 @@
+{
+  "new": "新規",
+  "open": "開く",
+  "save": "保存",
+  "saveAs": "別名保存",
+  "download": "PCへ保存",
+  "untitled": "無題.txt",
+  "lines": "行",
+  "chars": "文字",
+  "saved": "ファイルを保存しました",
+  "savePrompt": "保存先パスを入力してください:",
+  "openPrompt": "開くファイルのパスを入力してください:",
+  "fileNotFound": "ファイルが見つかりません: {path}",
+  "confirmDiscardTitle": "新規作成",
+  "confirmDiscardMsg": "変更が保存されていません。新規作成しますか？",
+  "discardAndNew": "破棄して新規作成",
+  "cancel": "キャンセル",
+  "saveError": "保存に失敗しました: {error}",
+  "openError": "ファイルを開けませんでした: {error}",
+  "modified": "変更あり"
+}
