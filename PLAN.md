@@ -18,7 +18,7 @@
 
 ---
 
-## 現状 (Phase 1～4.5 実装済み)
+## 現状 (Phase 1～5 実装済み)
 
 | ファイル | 実装内容 |
 |----------|---------|
@@ -29,8 +29,8 @@
 | `system/permissions.js` | ESKitPermissions — 2 段階権限管理 + ダイアログ |
 | `system/registry.js` | ESKitRegistry — アプリ登録・検索 |
 | `system/shell-mode.js` | ESKitShellMode — desktop/mobile モード管理 |
-| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API (`this.fs`, `this.sendMessage`, `this.listProcesses`) |
-| `system/system.js` | ESKitSystem — カーネル (boot, loadApp, IPC, notify) |
+| `system/app.js` | ESKitApp — ライフサイクルフック・開発者 API (`this.fs`, `this.sendMessage`, `this.listProcesses`, `this.showNotification`, `this.t`) |
+| `system/system.js` | ESKitSystem — カーネル (boot, loadApp, IPC, notify, theme, i18n, dialog, notifications) |
 | `system/window.js` | ESKitWindowSystem — モード対応ウィンドウ管理 |
 | `system/elements/desktop/` | `eskit-desktop` — デスクトップルート要素 |
 | `system/elements/window/` | `eskit-window` — アプリウィンドウ (desktop/mobile 対応) |
@@ -50,9 +50,16 @@
 | `system/main.css` | `--eskit-*` → `var(--kit-*)` CSS 変数ブリッジ |
 | `system/elements/context-menu/` | `eskit-context-menu` — 右クリックコンテキストメニュー (Phase 3) |
 | `system/elements/beacon/` | `eskit-beacon` — グローバル検索オーバーレイ (Phase 3) |
-| `system/elements/quick-settings/` | `eskit-quick-settings` — クイック設定パネル (Phase 3) |
+| `system/elements/quick-settings/` | `eskit-quick-settings` — クイック設定パネル (Phase 3/5) |
 | `system/hamon.js` | Hamon — リアクティブテンプレートエンジン (Phase 3.5) |
 | `system/users.js` | ESKitUsers — ユーザー管理・認証 (Phase 4) |
+| `system/icons.js` | ESKitIcons & `<eskit-icon>` — アイコンシステム (Phase 4.8) |
+| `system/theme.js` | ESKitTheme — テーマ & 壁紙管理 (Phase 5) |
+| `system/themes/presets.js` | 組み込みテーマ & 壁紙プリセット (Phase 5) |
+| `system/i18n.js` | ESKitI18n — 多言語辞書 & リアクティブ翻訳 (Phase 5) |
+| `system/elements/dialog/` | `eskit-dialog` — 汎用ダイアログ要素 (Phase 5) |
+| `system/elements/notification/` | `eskit-notification` / `eskit-notification-container` — 通知トースト (Phase 5) |
+| `apps/settings/` | SettingsApp — システム設定アプリ (Phase 5) |
 
 ### シェルモード (ESKitShellMode)
 
@@ -570,10 +577,11 @@ class ESKitIcons {
 
 ---
 
-## Phase 5: System Services — システムサービス
+## Phase 5: System Services — システムサービス ✅
 
 **目的:** テーマシステム、通知、i18n、設定アプリの基盤サービスを実装する。  
-**完了条件:** 組み込み・外部テーマの切替で OS 全体の見た目が即座に変わり、通知が表示・自動消去され、言語切替が反映される。
+**完了条件:** 組み込み・外部テーマの切替で OS 全体の見た目が即座に変わり、通知が表示・自動消去され、言語切替が反映される。  
+**ステータス:** 完了
 
 ### `system/theme.js` — テーマエンジン (新規)
 
@@ -585,7 +593,6 @@ class ESKitIcons {
 {
   "id": "catppuccin-mocha",
   "name": "Catppuccin Mocha",
-  "author": "Catppuccin",
   "dark": true,
   "vars": {
     "--kit-color-primary": "#cba6f7",

@@ -1,6 +1,7 @@
 import style    from "./style.js";
-import template from "./template.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
  * ESKitHomeBarElement — モバイルモード用ホームバー
@@ -14,10 +15,14 @@ import kitstrap2Sheet from "system/kitstrap2.js";
 export default class ESKitHomeBarElement extends HTMLElement {
   #offFocus = null;
   #offClose = null;
+  #offLocale = null;
+  #currentUuid = null;
+  #scope = null;
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   static get observedAttributes() {
@@ -31,20 +36,20 @@ export default class ESKitHomeBarElement extends HTMLElement {
   }
 
   disconnectedCallback() {
-    // システムイベントの購読解除
     this.#offFocus?.();
     this.#offClose?.();
+    this.#offLocale?.();
+    this.#scope?.dispose();
   }
 
   attributeChangedCallback() {
-    // mode が変わっても CSS の :host([mode="mobile"]) が display を制御するため
-    // JS 側では追加処置不要
   }
 
   // ─── 描画 ───────────────────────────────────────────────────────────────
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {
@@ -56,23 +61,37 @@ export default class ESKitHomeBarElement extends HTMLElement {
   // ─── イベント ──────────────────────────────────────────────────────────
 
   #bindEvents() {
-    this.shadowRoot.getElementById("home-btn").addEventListener("click", () => {
+    this.shadowRoot.getElementById("home-btn")?.addEventListener("click", () => {
       window.System?.WindowSystem?.drawer?.toggle();
     });
 
     const sys = window.System;
     if (!sys) return;
 
-    // アクティブアプリが変わったらタイトルを更新
     this.#offFocus = sys.events.on("app:focused", ({ uuid }) => {
-      const name = sys.getApp(uuid)?.name ?? "";
-      this.#setCurrentApp(name);
+      this.#currentUuid = uuid;
+      this.#updateCurrentApp();
     });
 
-    // アプリが閉じられたらタイトルをクリア
     this.#offClose = sys.events.on("app:closed", () => {
+      this.#currentUuid = null;
       this.#setCurrentApp("");
     });
+
+    this.#offLocale = sys.events.on("system:locale-changed", () => {
+      this.#updateCurrentApp();
+    });
+  }
+
+  #updateCurrentApp() {
+    if (!this.#currentUuid) {
+      this.#setCurrentApp("");
+      return;
+    }
+    const sys = window.System;
+    const app = sys?.getApp(this.#currentUuid);
+    const name = app ? (sys?.i18n?.getAppName(app._manifest) || app.name) : "";
+    this.#setCurrentApp(name);
   }
 
   #setCurrentApp(name) {

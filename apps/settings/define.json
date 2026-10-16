@@ -1,0 +1,27 @@
+{
+  "id": "eskit.settings",
+  "name": "設定",
+  "version": "1.0.0",
+  "description": "ESKit システム設定（外観・言語・通知・システム・権限）",
+  "entry": "main.js",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "settings"
+  },
+  "window": {
+    "title": "設定",
+    "width": 780,
+    "height": 560,
+    "minWidth": 480,
+    "minHeight": 360,
+    "resizable": true
+  },
+  "permissions": [
+    "system.info",
+    "fs.read",
+    "fs.write",
+    "notifications",
+    "clipboard"
+  ]
+}

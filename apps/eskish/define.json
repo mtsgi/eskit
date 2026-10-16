@@ -15,7 +15,6 @@
     "system.info",
     "notifications",
     "ipc",
-    "user.info",
-    "user.manage"
+    "user.info"
   ]
 }

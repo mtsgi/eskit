@@ -69,27 +69,111 @@ export default class ESKitPermissions {
 
   /**
    * 権限を許可 / 拒否に設定し localStorage に永続化する。
-   * @param {string} uuid
-   * @param {string} permission
+   * @param {string} uuidOrAppId アプリ UUID または App ID (例: "eskit.settings")
+   * @param {string} permission 権限コード
    * @param {boolean} [granted=true]
    */
-  grant(uuid, permission, granted = true) {
-    this.#decisions.set(`${uuid}:${permission}`, granted);
-    const manifest = this.#appManifests.get(uuid);
-    if (manifest) {
-      const stored = this.#loadStored(manifest.id);
-      stored[permission] = granted;
-      localStorage.setItem(this.#storageKey(manifest.id), JSON.stringify(stored));
+  grant(uuidOrAppId, permission, granted = true) {
+    let appId = uuidOrAppId;
+
+    if (this.#appManifests.has(uuidOrAppId)) {
+      const m = this.#appManifests.get(uuidOrAppId);
+      appId = m?.id || uuidOrAppId;
+      this.#decisions.set(`${uuidOrAppId}:${permission}`, granted);
+    } else {
+      // appId で全一致する実行中インスタンスの decision を更新
+      for (const [uuid, m] of this.#appManifests) {
+        if (m.id === uuidOrAppId || uuid === uuidOrAppId) {
+          this.#decisions.set(`${uuid}:${permission}`, granted);
+        }
+      }
     }
+
+    try {
+      const stored = this.#loadStored(appId);
+      stored[permission] = granted;
+      localStorage.setItem(this.#storageKey(appId), JSON.stringify(stored));
+    } catch (e) {
+      console.warn("[ESKitPermissions] Failed to persist permission to localStorage", e);
+    }
+
+    window.System?.events?.emit("permissions:changed", { appId, permission, state: granted ? "granted" : "denied" });
   }
 
   /**
    * 権限を拒否に設定し localStorage に永続化する。
-   * @param {string} uuid
+   * @param {string} uuidOrAppId
    * @param {string} permission
    */
-  deny(uuid, permission) {
-    this.grant(uuid, permission, false);
+  deny(uuidOrAppId, permission) {
+    this.grant(uuidOrAppId, permission, false);
+  }
+
+  /**
+   * 特定の権限個別を取り消す (localStorage およびセッション内 decisions から削除)。
+   * 次回アプリがその権限を要求した際に再度確認ダイアログが表示される。
+   * @param {string} uuidOrAppId アプリ UUID または App ID
+   * @param {string} permission 権限コード
+   */
+  revokePermission(uuidOrAppId, permission) {
+    let appId = uuidOrAppId;
+
+    // 該当するセッション decisions を削除
+    for (const [key] of [...this.#decisions.entries()]) {
+      const [uuid, perm] = key.split(":");
+      if (perm === permission) {
+        const manifest = this.#appManifests.get(uuid);
+        if (uuid === uuidOrAppId || manifest?.id === uuidOrAppId) {
+          this.#decisions.delete(key);
+          if (manifest?.id) appId = manifest.id;
+        }
+      }
+    }
+
+    if (this.#appManifests.has(uuidOrAppId)) {
+      appId = this.#appManifests.get(uuidOrAppId)?.id || appId;
+    }
+
+    try {
+      const stored = this.#loadStored(appId);
+      if (permission in stored) {
+        delete stored[permission];
+        localStorage.setItem(this.#storageKey(appId), JSON.stringify(stored));
+      }
+    } catch (e) {
+      console.warn("[ESKitPermissions] Failed to remove permission from localStorage", e);
+    }
+
+    window.System?.events?.emit("permissions:changed", { appId, permission, state: "unprompted" });
+  }
+
+  /**
+   * アプリのすべての実行時権限を取り消す。
+   * @param {string} uuidOrAppId
+   */
+  revokeAll(uuidOrAppId) {
+    let appId = uuidOrAppId;
+
+    for (const [key] of [...this.#decisions.entries()]) {
+      const [uuid] = key.split(":");
+      const manifest = this.#appManifests.get(uuid);
+      if (uuid === uuidOrAppId || manifest?.id === uuidOrAppId) {
+        this.#decisions.delete(key);
+        if (manifest?.id) appId = manifest.id;
+      }
+    }
+
+    if (this.#appManifests.has(uuidOrAppId)) {
+      appId = this.#appManifests.get(uuidOrAppId)?.id || appId;
+    }
+
+    try {
+      localStorage.removeItem(this.#storageKey(appId));
+    } catch (e) {
+      console.warn("[ESKitPermissions] Failed to clear permissions from localStorage", e);
+    }
+
+    window.System?.events?.emit("permissions:changed", { appId, state: "unprompted" });
   }
 
   /**
@@ -103,10 +187,50 @@ export default class ESKitPermissions {
     this.#appManifests.delete(uuid);
   }
 
+  /**
+   * 権限の現在の決定状態を取得する。
+   * @param {string} uuidOrAppId
+   * @param {string} permission
+   * @returns {"granted" | "denied" | "unprompted"}
+   */
+  getPermissionState(uuidOrAppId, permission) {
+    let appId = uuidOrAppId;
+    if (this.#appManifests.has(uuidOrAppId)) {
+      appId = this.#appManifests.get(uuidOrAppId)?.id || uuidOrAppId;
+    }
+
+    // まずセッション内 decisions を確認
+    if (this.#decisions.has(`${uuidOrAppId}:${permission}`)) {
+      return this.#decisions.get(`${uuidOrAppId}:${permission}`) ? "granted" : "denied";
+    }
+
+    // 次に localStorage を確認
+    try {
+      const stored = this.#loadStored(appId);
+      if (stored[permission] === true) return "granted";
+      if (stored[permission] === false) return "denied";
+    } catch {
+      // ignore
+    }
+
+    return "unprompted";
+  }
+
+  /**
+   * アプリに保存されている全権限決定を取得する。
+   * @param {string} appId
+   * @returns {Record<string, boolean>}
+   */
+  getStoredDecisions(appId) {
+    return this.#loadStored(appId);
+  }
+
   // ─── 内部ヘルパー ──────────────────────────────────────────────────────────
 
   #loadStored(appId) {
     try {
+      const user = window.System?.currentUser;
+      if (!user) return {};
       return JSON.parse(localStorage.getItem(this.#storageKey(appId)) ?? "{}");
     } catch {
       return {};

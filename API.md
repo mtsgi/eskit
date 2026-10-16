@@ -30,14 +30,18 @@ System.homeDir("bob");                        // 指定ユーザーのホーム�
 System.logout();                              // ログアウトしてログイン画面に戻る
 
 // サブシステムへのアクセス
-System.events       // ESKitEventBus
-System.fs           // ESKitFileSystem
-System.registry     // ESKitRegistry
-System.permissions  // ESKitPermissions
-System.users        // ESKitUsers
-System.shellMode    // ESKitShellMode
-System.icons        // ESKitIcons
-System.WindowSystem // ESKitWindowSystem (ブート後)
+System.events        // ESKitEventBus
+System.fs            // ESKitFileSystem
+System.registry      // ESKitRegistry
+System.permissions   // ESKitPermissions
+System.users         // ESKitUsers
+System.shellMode     // ESKitShellMode
+System.icons         // ESKitIcons
+System.theme         // ESKitTheme (Phase 5)
+System.i18n          // ESKitI18n (Phase 5)
+System.dialog        // ESKitDialogElement ファサード (Phase 5)
+System.notifications // ESKitNotificationsStore (Phase 5)
+System.WindowSystem  // ESKitWindowSystem (ブート後)
 ```
 
 ### `System.ready`
@@ -469,10 +473,19 @@ System.permissions.isDeclared(uuid, "fs.read"); // boolean
 // Runtime チェック (非同期): 実際の許可状態を確認 (必要に応じてダイアログ)
 const granted = await System.permissions.check(uuid, "notifications");
 
-// 権限を明示的に許可 / 拒否し localStorage に永続化する
-System.permissions.grant(uuid, "fs.read");         // 許可
-System.permissions.grant(uuid, "fs.read", false);  // 拒否 (第 3 引数)
-System.permissions.deny(uuid, "fs.read");          // 拒否のショートハンド
+// 権限を明示的に許可 / 拒否し localStorage に永続化する (UUID または App ID)
+System.permissions.grant(appId, "fs.read");         // 許可
+System.permissions.grant(appId, "fs.read", false);  // 拒否 (第 3 引数)
+System.permissions.deny(appId, "fs.read");          // 拒否のショートハンド
+
+// 個別権限の取り消し (次回アクセス時に再確認を要求)
+System.permissions.revokePermission(appId, "fs.read");
+
+// アプリの全権限を取り消し
+System.permissions.revokeAll(appId);
+
+// 権限状態の取得 ("granted" | "denied" | "unprompted")
+const state = System.permissions.getPermissionState(appId, "fs.read");
 
 // アプリ終了時にセッションエントリをクリア (localStorage は維持)
 System.permissions.revoke(uuid);
@@ -856,4 +869,133 @@ ESKit 標準の組み込みターミナル環境 (`apps/eskish/`) です。EcmaS
 | `eval` | `js` | `<code...>` | 現在のコンテキスト (`this`, `System`) で JS 式を実行 | (実行内容に準拠) |
 | `clear` | `cls` | — | ターミナル画面を消去 | (なし) |
 | `help` | `?` | — | 利用可能なコマンド一覧と説明を表示 | (なし) |
+
+---
+
+## `System.theme` — テーマ & 外観管理
+
+システム全体のカラーモード（ライト/ダーク/OS連動）、カラーテーマプリセット、カスタム CSS 変数、壁紙を管理する `ESKitTheme` インスタンスです。
+設定は VFS（`/home/{userId}/.config/theme.json`）に永続化されます。
+
+```js
+System.theme.mode;        // "light" | "dark" | "auto"
+System.theme.current;     // 現在のテーマプリセット ID (例: "catppuccin-mocha")
+System.theme.isDark;      // boolean (現在の実効ダークモード判定)
+System.theme.list;        // 利用可能な全テーマ一覧 (ThemeMeta[])
+System.theme.wallpapers;  // 組み込み壁紙プリセット一覧
+System.theme.vars;        // 現在適用されている全 CSS 変数マップ
+System.theme.wallpaper;   // 現在の壁紙 CSS 値
+
+System.theme.setMode("dark");                  // カラーモードを変更 ("light" | "dark" | "auto")
+System.theme.apply("nord");                    // プリセットテーマを適用
+System.theme.applyVars({ "--kit-color-primary": "#e63946" }); // カスタム CSS 変数を直接適用
+System.theme.setWallpaper("radial-gradient(...)"); // 壁紙を変更
+await System.theme.load("https://example.com/theme.json"); // 外部 URL からテーマを fetch・インポート
+System.theme.reset();                          // デフォルトテーマにリセット
+const jsonStr = System.theme.export();         // 現在のテーマ設定を JSON 出力
+```
+
+### イベント
+
+テーマ変更時には `System.events` から `"system:theme-changed"` イベントが発行されます。
+```js
+System.events.on("system:theme-changed", ({ id, mode, dark, vars, wallpaper }) => {
+  console.log("Theme updated:", id, mode);
+});
+```
+
+---
+
+## `System.i18n` — 多言語対応
+
+Hamon の Signal を活用したリアクティブな多言語翻訳サービスを提供する `ESKitI18n` インスタンスです。
+設定は VFS（`/home/{userId}/.config/i18n.json`）に永続化されます。
+
+```js
+System.i18n.current;      // 現在の言語コード ("ja" | "en")
+System.i18n.available;    // 利用可能な言語一覧 (["ja", "en"])
+System.i18n.locale;       // Hamon Signal<string>
+
+// 翻訳テキストの取得 (Hamon テンプレート内で自動依存追跡)
+System.i18n.t("system.desktop"); // "デスクトップ" (ja) / "Desktop" (en)
+System.i18n.t("verifierTest.testGreeting", { name: "ESKit" }); // テンプレート変数補間
+
+// 言語の変更
+await System.i18n.setLocale("en");
+
+// アプリ独自辞書の登録・拡張
+System.i18n.extend("myApp", "ja", {
+  title: "マイアプリ",
+  welcome: "ようこそ {user} さん",
+});
+```
+
+---
+
+## `System.dialog` — 汎用ダイアログ
+
+Popover API を用いたモーダル・ダイアログの表示と非同期待機を提供するファサードです。
+
+```js
+// 1. アラート
+await System.dialog.alert({
+  title: "完了",
+  message: "ファイルの保存が完了しました。",
+  icon: "check-circle",
+});
+
+// 2. 確認ダイアログ
+const ok = await System.dialog.confirm({
+  title: "削除の確認",
+  message: "本当にこのファイルを削除しますか？",
+  danger: true,
+  okText: "削除",
+  cancelText: "キャンセル",
+});
+
+// 3. 入力ダイアログ
+const input = await System.dialog.prompt({
+  title: "新しいフォルダ名",
+  defaultValue: "New Folder",
+  placeholder: "フォルダ名を入力",
+});
+
+// 4. カスタムダイアログ
+const buttonId = await System.dialog.custom({
+  title: "カスタム設定",
+  message: "オプションを選択してください",
+  content: customDomNodeOrString,
+  buttons: [
+    { id: "cancel", label: "キャンセル", flat: true },
+    { id: "save", label: "保存", primary: true },
+  ],
+});
+```
+
+---
+
+## `System.notifications` — 通知センター
+
+受信した通知の履歴管理と状態管理を行うストアです。
+
+```js
+System.notifications.list();         // 受信した通知一覧 ({ id, title, message, type, time, read }[])
+System.notifications.unreadCount;    // 未読通知数
+System.notifications.markAllRead();  // すべて既読にする
+System.notifications.clear();        // 履歴をすべて消去
+```
+
+---
+
+## `設定` (SettingsApp) — システム設定アプリ
+
+`apps/settings/` に配置された、Hamon リアクティブテンプレートエンジンで構築された標準設定アプリです。
+
+### 提供機能
+1. **外観 (Appearance):** カラーモード（ライト/ダーク/OS連動）切替、8 種類のテーマプリセット選択、壁紙ギャラリー選択、外部 URL からのテーマインポート、現在のテーマ設定のエクスポート
+2. **言語 (Language):** 表示言語（日本語 / English）の即時切替
+3. **通知 (Notifications):** 通知履歴（Notification Center）の閲覧・消去、テスト通知送信
+4. **システム (System):** OS バージョン・ユーザー・シェルモード等のシステムサマリ、実行中プロセス一覧と強制終了
+5. **権限 (Permissions):** 実行中アプリの要求権限一覧の確認と個別取り消し
+
 

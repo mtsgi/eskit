@@ -1,16 +1,21 @@
 import style from "./style.js";
-import template from "./template.js";
+import createTemplate from "./template.js";
 import kitstrap2Sheet from "system/kitstrap2.js";
+import { HamonScope } from "system/hamon.js";
 
 /**
- * ESKitLoginScreenElement — 初期管理者作成 / ログイン画面
+ * ESKitLoginScreenElement — ログイン画面
  */
 export default class ESKitLoginScreenElement extends HTMLElement {
   #resolve = null;
+  #scope = null;
+  #offLocale = null;
+  #currentUsers = [];
 
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.#scope = new HamonScope();
   }
 
   connectedCallback() {
@@ -19,11 +24,20 @@ export default class ESKitLoginScreenElement extends HTMLElement {
     this.#bindEvents();
   }
 
+  disconnectedCallback() {
+    this.#offLocale?.();
+    this.#scope?.dispose();
+  }
+
   requestLogin(users, errorMessage = "") {
     this.setAttribute("open", "");
+    this.#currentUsers = users || [];
 
-    this.#setSubtitle("ログインするユーザーとパスワードを入力してください");
-    this.#setSubmitLabel("ログイン");
+    const subText = window.System?.i18n?.t("login.subtitleLogin") || "サインインしてセッションを開始してください";
+    const btnText = window.System?.i18n?.t("login.loginButton") || "ログイン";
+
+    this.#setSubtitle(subText);
+    this.#setSubmitLabel(btnText);
     this.#setError(errorMessage);
 
     const selectEl = this.shadowRoot.getElementById("login-user-id");
@@ -60,8 +74,16 @@ export default class ESKitLoginScreenElement extends HTMLElement {
     formEl.addEventListener("submit", (e) => {
       e.preventDefault();
       if (!this.#resolve) return;
-
       this.#onLoginSubmit();
+    });
+
+    this.#offLocale = window.System?.events?.on("system:locale-changed", () => {
+      if (this.hasAttribute("open")) {
+        const subText = window.System?.i18n?.t("login.subtitleLogin") || "サインインしてセッションを開始してください";
+        const btnText = window.System?.i18n?.t("login.loginButton") || "ログイン";
+        this.#setSubtitle(subText);
+        this.#setSubmitLabel(btnText);
+      }
     });
   }
 
@@ -70,7 +92,7 @@ export default class ESKitLoginScreenElement extends HTMLElement {
     const password = this.shadowRoot.getElementById("password").value;
 
     if (!id) {
-      this.#setError("ユーザーを選択してください");
+      this.#setError(window.System?.i18n?.t("login.errUserNotFound") || "ユーザーを選択してください");
       return;
     }
 
@@ -86,7 +108,7 @@ export default class ESKitLoginScreenElement extends HTMLElement {
   #setSubmitLabel(text) {
     const el = this.shadowRoot.getElementById("submit");
     if (el) {
-      el.innerHTML = `<span class="kit-flex kit-items-center kit-gap-xs"><span>${text}</span><eskit-icon set="lucide" name="arrow-right" size="14"></eskit-icon></span>`;
+      el.innerHTML = `<span class="kit-flex kit-flex-middle kit-gap-xs"><span>${text}</span><eskit-icon set="lucide" name="arrow-right" size="14"></eskit-icon></span>`;
     }
   }
 
@@ -104,7 +126,8 @@ export default class ESKitLoginScreenElement extends HTMLElement {
   }
 
   #render() {
-    this.shadowRoot.innerHTML = template;
+    const frag = createTemplate(this.#scope);
+    this.shadowRoot.replaceChildren(frag);
   }
 
   #adoptStyle() {

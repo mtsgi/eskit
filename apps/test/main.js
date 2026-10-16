@@ -28,17 +28,17 @@ export default class SystemVerifier extends ESKitApp {
     this.name     = "SystemVerifier";
     this.template = hamon`
       <div class="runner">
-        <div class="toolbar">
-          <button @click=${() => this.#runAll()} class="kit-button -primary -small kit-flex kit-items-center kit-gap-xs">
-            <eskit-icon set="lucide" name="sparkles" size="14"></eskit-icon>
-            Run All Tests
+        <div class="controls">
+          <button @click=${() => this.#runAll()} class="kit-button -primary -small kit-flex kit-flex-middle kit-gap-xs">
+            <eskit-icon set="lucide" name="play" size="14"></eskit-icon>
+            <span>Run All Tests</span>
           </button>
-          <button @click=${() => this.#testNotify()} class="kit-button -small kit-flex kit-items-center kit-gap-xs">
+          <button @click=${() => this.#testNotify()} class="kit-button -small kit-flex kit-flex-middle kit-gap-xs">
             <eskit-icon set="lucide" name="bell" size="14"></eskit-icon>
-            Test Notification
+            <span>Test Notification</span>
           </button>
-          <span :class=${() => `summary ${this.#summaryClass.value}`}>${() => this.#summaryText.value}</span>
         </div>
+        <span :class=${() => `summary ${this.#summaryClass.value}`}>${() => this.#summaryText.value}</span>
         <ol id="results" class="results">
           ${list(
             () => this.#resultItems.value,
@@ -143,6 +143,35 @@ export default class SystemVerifier extends ESKitApp {
       () => this.#testIconElementRender(),
       () => this.#testIconElementFallback(),
       () => this.#testCreateAppIcon(),
+    ]);
+
+    await this.#runSection("Phase 5: Theme System (ESKitTheme)", [
+      () => this.#testThemePresets(),
+      () => this.#testThemeModeSwitching(),
+      () => this.#testThemeApply(),
+      () => this.#testThemeWallpaper(),
+      () => this.#testThemeExport(),
+    ]);
+
+    await this.#runSection("Phase 5: i18n System (ESKitI18n)", [
+      () => this.#testI18nTranslation(),
+      () => this.#testI18nLocaleSwitch(),
+      () => this.#testI18nExtend(),
+      () => this.#testI18nDateTimeFormatting(),
+      () => this.#testI18nAppResolution(),
+      () => this.#testI18nPermissionDescriptions(),
+      () => this.#testI18nDictionaryIntegrity(),
+    ]);
+
+    await this.#runSection("Phase 5: Dialog & Notifications Store", [
+      () => this.#testDialogFacade(),
+      () => this.#testNotificationsStore(),
+    ]);
+
+    await this.#runSection("Phase 5: Permission Management (ESKitPermissions)", [
+      () => this.#testPermissionStateAndGrant(),
+      () => this.#testPermissionSingleRevoke(),
+      () => this.#testPermissionRevokeAll(),
     ]);
 
     this.#updateSummary();
@@ -593,6 +622,296 @@ export default class SystemVerifier extends ESKitApp {
       this.#assert(nullIcon.tagName.toLowerCase() === "eskit-icon", "nullIcon is not <eskit-icon>");
       this.#assert(nullIcon.getAttribute("name") === "package", "nullIcon name != package");
       return "OK";
+    });
+  }
+
+  // ─── Phase 5: テーマテスト ──────────────────────────────────────────────────
+
+  async #testThemePresets() {
+    await this.#test("Theme: 組み込みプリセット一覧 (Catppuccin, Nord 等)", () => {
+      const list = System.theme.list;
+      this.#assert(Array.isArray(list) && list.length >= 6, `presets length=${list.length}`);
+      const mocha = list.find((t) => t.id === "catppuccin-mocha");
+      this.#assert(mocha !== undefined, "catppuccin-mocha not found in theme list");
+      this.#assert(mocha.dark === true, "catppuccin-mocha is not dark");
+      return `${list.length} presets registered`;
+    });
+  }
+
+  async #testThemeModeSwitching() {
+    await this.#test("Theme: カラーモード切替 (light / dark / auto)", () => {
+      const prevMode = System.theme.mode;
+      try {
+        System.theme.setMode("dark");
+        this.#assert(System.theme.isDark === true, "isDark is false when mode=dark");
+        this.#assert(document.documentElement.classList.contains("kit-dark"), "html missing .kit-dark");
+
+        System.theme.setMode("light");
+        this.#assert(System.theme.isDark === false, "isDark is true when mode=light");
+        this.#assert(document.documentElement.classList.contains("kit-light"), "html missing .kit-light");
+
+        System.theme.setMode("auto");
+        this.#assert(System.theme.mode === "auto", "mode is not auto");
+      } finally {
+        System.theme.setMode(prevMode);
+      }
+      return "OK";
+    });
+  }
+
+  async #testThemeApply() {
+    await this.#test("Theme: プリセット適用 (apply)", () => {
+      const prevTheme = System.theme.current;
+      try {
+        System.theme.apply("catppuccin-mocha");
+        this.#assert(System.theme.current === "catppuccin-mocha", `current=${System.theme.current}`);
+        const vars = System.theme.vars;
+        this.#assert(vars["--kit-color-primary"] === "#cba6f7", `primary=${vars["--kit-color-primary"]}`);
+      } finally {
+        System.theme.apply(prevTheme);
+      }
+      return "OK";
+    });
+  }
+
+  async #testThemeWallpaper() {
+    await this.#test("Theme: 壁紙設定 (setWallpaper)", () => {
+      const prevWp = System.theme.wallpaper;
+      try {
+        const testGradient = "linear-gradient(90deg, #111, #222)";
+        System.theme.setWallpaper(testGradient);
+        this.#assert(System.theme.wallpaper === testGradient, `wallpaper=${System.theme.wallpaper}`);
+      } finally {
+        System.theme.setWallpaper(prevWp);
+      }
+      return "OK";
+    });
+  }
+
+  async #testThemeExport() {
+    await this.#test("Theme: エクスポート JSON 出力", () => {
+      const jsonStr = System.theme.export();
+      this.#assert(typeof jsonStr === "string", "export is not string");
+      const parsed = JSON.parse(jsonStr);
+      this.#assert(parsed.id !== undefined && parsed.vars !== undefined, "parsed export missing id or vars");
+      return `Exported ${parsed.name}`;
+    });
+  }
+
+  // ─── Phase 5: i18n テスト ───────────────────────────────────────────────────
+
+  async #testI18nTranslation() {
+    await this.#test("i18n: 翻訳取得 (t) & フォールバック", () => {
+      const jaVal = System.i18n.t("system.desktop");
+      this.#assert(typeof jaVal === "string" && jaVal.length > 0, `jaVal=${jaVal}`);
+
+      const missingKey = "some.non.existent.key.12345";
+      const fallback = System.i18n.t(missingKey);
+      this.#assert(fallback === missingKey, `fallback=${fallback}`);
+      return "OK";
+    });
+  }
+
+  async #testI18nLocaleSwitch() {
+    await this.#test("i18n: 言語切替 (setLocale)", async () => {
+      const prevLocale = System.i18n.current;
+      try {
+        await System.i18n.setLocale("en");
+        this.#assert(System.i18n.current === "en", `locale=${System.i18n.current}`);
+        this.#assert(System.i18n.t("system.desktop") === "Desktop", `t()=${System.i18n.t("system.desktop")}`);
+
+        await System.i18n.setLocale("ja");
+        this.#assert(System.i18n.current === "ja", `locale=${System.i18n.current}`);
+        this.#assert(System.i18n.t("system.desktop") === "デスクトップ", `t()=${System.i18n.t("system.desktop")}`);
+      } finally {
+        await System.i18n.setLocale(prevLocale);
+      }
+      return "OK";
+    });
+  }
+
+  async #testI18nExtend() {
+    await this.#test("i18n: アプリ独自辞書拡張 (extend)", () => {
+      System.i18n.extend("verifierTest", "ja", { testGreeting: "こんにちは {name}" });
+      const res = System.i18n.t("verifierTest.testGreeting", { name: "ESKit" });
+      this.#assert(res === "こんにちは ESKit", `res=${res}`);
+      return res;
+    });
+  }
+
+  async #testI18nDateTimeFormatting() {
+    await this.#test("i18n: 日時フォーマット (formatTime / formatDate)", async () => {
+      const fixedDate = new Date("2026-08-28T14:30:00Z");
+      const prevLocale = System.i18n.current;
+      try {
+        await System.i18n.setLocale("ja");
+        const timeJa = System.i18n.formatTime(fixedDate);
+        const dateJa = System.i18n.formatDate(fixedDate);
+        this.#assert(typeof timeJa === "string" && timeJa.length > 0, `timeJa=${timeJa}`);
+        this.#assert(typeof dateJa === "string" && dateJa.length > 0, `dateJa=${dateJa}`);
+
+        await System.i18n.setLocale("en");
+        const timeEn = System.i18n.formatTime(fixedDate);
+        const dateEn = System.i18n.formatDate(fixedDate);
+        this.#assert(typeof timeEn === "string" && timeEn.length > 0, `timeEn=${timeEn}`);
+        this.#assert(typeof dateEn === "string" && dateEn.length > 0, `dateEn=${dateEn}`);
+      } finally {
+        await System.i18n.setLocale(prevLocale);
+      }
+      return "OK";
+    });
+  }
+
+  async #testI18nAppResolution() {
+    await this.#test("i18n: アプリ名 & 説明文解決 (getAppName / getAppDescription)", async () => {
+      const prevLocale = System.i18n.current;
+      const testManifest = { id: "eskit.welcome", name: "WelcomeApp", description: "Default desc" };
+      try {
+        await System.i18n.setLocale("ja");
+        const nameJa = System.i18n.getAppName(testManifest);
+        const descJa = System.i18n.getAppDescription(testManifest);
+        this.#assert(nameJa === "ようこそ", `nameJa=${nameJa}`);
+        this.#assert(descJa.includes("ESKit"), `descJa=${descJa}`);
+
+        await System.i18n.setLocale("en");
+        const nameEn = System.i18n.getAppName(testManifest);
+        const descEn = System.i18n.getAppDescription(testManifest);
+        this.#assert(nameEn === "Welcome", `nameEn=${nameEn}`);
+        this.#assert(descEn.includes("ESKit"), `descEn=${descEn}`);
+      } finally {
+        await System.i18n.setLocale(prevLocale);
+      }
+      return "OK";
+    });
+  }
+
+  async #testI18nPermissionDescriptions() {
+    await this.#test("i18n: 権限説明文の解決 (getPermissionDescription)", async () => {
+      const prevLocale = System.i18n.current;
+      try {
+        await System.i18n.setLocale("ja");
+        const descJa = System.i18n.getPermissionDescription("fs.read");
+        this.#assert(typeof descJa === "string" && descJa !== "fs.read", `descJa=${descJa}`);
+
+        await System.i18n.setLocale("en");
+        const descEn = System.i18n.getPermissionDescription("fs.read");
+        this.#assert(typeof descEn === "string" && descEn.includes("home directory"), `descEn=${descEn}`);
+      } finally {
+        await System.i18n.setLocale(prevLocale);
+      }
+      return "OK";
+    });
+  }
+
+  async #testI18nDictionaryIntegrity() {
+    await this.#test("i18n: 辞書キー整合性チェック (ja ↔ en)", async () => {
+      const jaUrl = new URL("../../system/i18n/ja.json", import.meta.url);
+      const enUrl = new URL("../../system/i18n/en.json", import.meta.url);
+      const [jaRes, enRes] = await Promise.all([fetch(jaUrl), fetch(enUrl)]);
+      const [jaDict, enDict] = await Promise.all([jaRes.json(), enRes.json()]);
+
+      const collectKeys = (obj, prefix = "") => {
+        let keys = [];
+        for (const [k, v] of Object.entries(obj)) {
+          const path = prefix ? `${prefix}.${k}` : k;
+          if (v && typeof v === "object" && !Array.isArray(v)) {
+            keys.push(...collectKeys(v, path));
+          } else {
+            keys.push(path);
+          }
+        }
+        return keys;
+      };
+
+      const jaKeys = new Set(collectKeys(jaDict));
+      const enKeys = new Set(collectKeys(enDict));
+
+      const missingInEn = [...jaKeys].filter(k => !enKeys.has(k));
+      const missingInJa = [...enKeys].filter(k => !jaKeys.has(k));
+
+      this.#assert(missingInEn.length === 0, `Keys missing in EN: ${missingInEn.join(", ")}`);
+      this.#assert(missingInJa.length === 0, `Keys missing in JA: ${missingInJa.join(", ")}`);
+      return `All ${jaKeys.size} translation keys matched across JA & EN`;
+    });
+  }
+
+  // ─── Phase 5: Dialog & Notifications テスト ───────────────────────────────
+
+  async #testDialogFacade() {
+    await this.#test("Dialog: System.dialog ファサード API 存在確認", () => {
+      this.#assert(System.dialog !== null && System.dialog !== undefined, "System.dialog is null");
+      this.#assert(typeof System.dialog.alert === "function", "alert is not a function");
+      this.#assert(typeof System.dialog.confirm === "function", "confirm is not a function");
+      this.#assert(typeof System.dialog.prompt === "function", "prompt is not a function");
+      this.#assert(typeof System.dialog.custom === "function", "custom is not a function");
+      return "OK";
+    });
+  }
+
+  async #testNotificationsStore() {
+    await this.#test("Notifications: 通知ストア (add, list, clear, unreadCount)", () => {
+      const initialCount = System.notifications.list().length;
+      const item = System.notifications.add({
+        title: "Test Note",
+        message: "Store testing",
+        type: "success",
+      });
+      this.#assert(item.id !== undefined, "item id is undefined");
+      this.#assert(System.notifications.list().length === initialCount + 1, "list length did not increase");
+
+      System.notifications.markAllRead();
+      this.#assert(System.notifications.unreadCount === 0, "unreadCount is not 0 after markAllRead");
+
+      System.notifications.clear();
+      this.#assert(System.notifications.list().length === 0, "list is not empty after clear");
+      return "OK";
+    });
+  }
+
+  // ─── Phase 5: Permission テスト ──────────────────────────────────────────
+
+  async #testPermissionStateAndGrant() {
+    await this.#test("Permissions: grant / deny / getPermissionState", () => {
+      const testAppId = "eskit.test.perm.demo";
+      System.permissions.grant(testAppId, "fs.read", true);
+      System.permissions.grant(testAppId, "notifications", false);
+
+      this.#assert(System.permissions.getPermissionState(testAppId, "fs.read") === "granted", "fs.read is not granted");
+      this.#assert(System.permissions.getPermissionState(testAppId, "notifications") === "denied", "notifications is not denied");
+      this.#assert(System.permissions.getPermissionState(testAppId, "clipboard") === "unprompted", "clipboard is not unprompted");
+
+      return "OK";
+    });
+  }
+
+  async #testPermissionSingleRevoke() {
+    await this.#test("Permissions: 個別権限の取り消し (revokePermission)", () => {
+      const testAppId = "eskit.test.perm.demo";
+      System.permissions.grant(testAppId, "fs.read", true);
+      System.permissions.grant(testAppId, "fs.write", true);
+
+      // fs.read のみ個別取り消し
+      System.permissions.revokePermission(testAppId, "fs.read");
+
+      this.#assert(System.permissions.getPermissionState(testAppId, "fs.read") === "unprompted", "fs.read was not revoked");
+      this.#assert(System.permissions.getPermissionState(testAppId, "fs.write") === "granted", "fs.write should still be granted");
+
+      return "Single permission revoked without affecting others";
+    });
+  }
+
+  async #testPermissionRevokeAll() {
+    await this.#test("Permissions: 全権限の一括取り消し (revokeAll)", () => {
+      const testAppId = "eskit.test.perm.demo";
+      System.permissions.grant(testAppId, "fs.read", true);
+      System.permissions.grant(testAppId, "fs.write", true);
+
+      System.permissions.revokeAll(testAppId);
+
+      this.#assert(System.permissions.getPermissionState(testAppId, "fs.read") === "unprompted", "fs.read is not unprompted");
+      this.#assert(System.permissions.getPermissionState(testAppId, "fs.write") === "unprompted", "fs.write is not unprompted");
+
+      return "All permissions cleared";
     });
   }
 
