@@ -32,6 +32,10 @@ export default css`
   /* ─── テキスト ──────────────────────────────────────────────── */
 
   .title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kit-space-xs);
     margin: 0 0 var(--kit-space-s);
     font-size: var(--kit-font-size-m);
     font-weight: var(--kit-font-weight-bold);

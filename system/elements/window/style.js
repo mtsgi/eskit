@@ -113,6 +113,16 @@ export default css`
     cursor: default;
   }
 
+  .app-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: var(--kit-space-xs);
+    flex-shrink: 0;
+    line-height: 1;
+    pointer-events: none;
+  }
+
   .app-title {
     font-size: var(--kit-font-size-s);
     font-weight: var(--kit-font-weight-bold);

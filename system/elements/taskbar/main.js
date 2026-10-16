@@ -78,8 +78,8 @@ export default class ESKitTaskbarElement extends HTMLElement {
     if (!sys) return;
 
     // アプリ起動 → ボタン追加
-    this.#offOpened = sys.events.on("app:opened", ({ uuid, name }) => {
-      this.#addAppButton(uuid, name);
+    this.#offOpened = sys.events.on("app:opened", ({ uuid, name, icon }) => {
+      this.#addAppButton(uuid, name, icon);
     });
 
     // アプリ終了 → ボタン削除
@@ -100,14 +100,22 @@ export default class ESKitTaskbarElement extends HTMLElement {
 
   // ─── アプリボタン管理 ─────────────────────────────────────────────────
 
-  #addAppButton(uuid, name) {
+  #addAppButton(uuid, name, icon) {
     const container = this.shadowRoot.getElementById("taskbar-apps");
     if (!container) return;
 
     const btn = document.createElement("button");
     btn.className = "app-btn";
     btn.dataset.uuid = uuid;
-    btn.textContent = name;
+
+    const iconEl = window.System?.icons?.createAppIcon(icon, { size: 16 });
+    if (iconEl) btn.appendChild(iconEl);
+
+    const label = document.createElement("span");
+    label.className = "app-btn-label";
+    label.textContent = name;
+    btn.appendChild(label);
+
     btn.addEventListener("click", () => {
       window.System?.WindowSystem?.activateWindow(uuid);
     });
@@ -128,7 +136,14 @@ export default class ESKitTaskbarElement extends HTMLElement {
     const container = this.shadowRoot.getElementById("taskbar-apps");
     if (!container) return;
     const btn = container.querySelector(`[data-uuid="${CSS.escape(uuid)}"]`);
-    if (btn) btn.textContent = title;
+    if (btn) {
+      const label = btn.querySelector(".app-btn-label");
+      if (label) {
+        label.textContent = title;
+      } else {
+        btn.textContent = title;
+      }
+    }
   }
 
   #setActive(uuid) {

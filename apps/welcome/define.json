@@ -4,5 +4,10 @@
   "entry": "main.js",
   "version": "1.0.0",
   "description": "ようこそアプリ",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "sparkles"
+  },
   "permissions": []
 }

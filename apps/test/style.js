@@ -47,7 +47,7 @@ export default css`
     display: grid;
     grid-template-columns: 1.2rem 1fr auto;
     gap: var(--kit-space-xs);
-    align-items: baseline;
+    align-items: center;
     padding: 0.18rem var(--kit-space-s);
   }
 
