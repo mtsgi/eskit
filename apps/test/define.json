@@ -4,5 +4,10 @@
   "entry": "main.js",
   "version": "1.0.0",
   "description": "ESKit システム機能の網羅的な検証アプリ",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "check-circle-2"
+  },
   "permissions": ["fs.read", "fs.write", "notifications", "ipc", "system.info"]
 }

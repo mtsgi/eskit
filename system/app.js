@@ -31,6 +31,18 @@ export default class ESKitApp {
     // Note: initialize() は ESKitSystem が _windowElement 注入後に呼び出す
   }
 
+  /**
+   * アプリマニフェスト（読み取り専用・イミュータブルコピー）
+   * @returns {Readonly<object>|null}
+   */
+  get manifest() {
+    if (!this._manifest) return null;
+    return Object.freeze({
+      ...this._manifest,
+      permissions: Object.freeze([...(this._manifest.permissions || [])]),
+    });
+  }
+
   // ─── ライフサイクルフック (サブクラスでオーバーライド) ──────────────────────
 
   /** アプリ起動時に呼ばれる。querySelector() 使用可。 */

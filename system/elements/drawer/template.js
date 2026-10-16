@@ -5,11 +5,11 @@ export default html`
     <div class="drawer-topbar">
       <span class="drawer-time" id="drawer-time"></span>
       <button class="qs-open-btn" id="qs-btn" title="クイック設定">
-        <span>⚙️</span>
+        <eskit-icon set="lucide" name="settings" size="16"></eskit-icon>
         <span class="qs-open-label">設定</span>
       </button>
       <button class="qs-open-btn" id="beacon-btn" title="検索">
-        <span>🔍</span>
+        <eskit-icon set="lucide" name="search" size="16"></eskit-icon>
         <span class="qs-open-label">検索</span>
       </button>
     </div>

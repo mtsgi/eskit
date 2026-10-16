@@ -68,6 +68,18 @@ export default class ESKitWindowElement extends HTMLElement {
   }
 
   /**
+   * ウィンドウヘッダーのアプリアイコンを更新する。
+   * @param {object|null} iconDef
+   */
+  setIcon(iconDef) {
+    const el = this.shadowRoot?.getElementById("window-icon");
+    if (!el) return;
+    el.innerHTML = "";
+    const iconEl = window.System?.icons?.createAppIcon(iconDef, { size: 16 });
+    if (iconEl) el.appendChild(iconEl);
+  }
+
+  /**
    * ウィンドウを最前面にフォーカスする。
    */
   focus() {
@@ -98,7 +110,7 @@ export default class ESKitWindowElement extends HTMLElement {
     this.#clearSnapClasses();
     this._state = "maximized";
     this.classList.add("maximized");
-    this.shadowRoot.querySelector(".btn-maximize").textContent = "❐";
+    this.shadowRoot.querySelector(".btn-maximize eskit-icon")?.setAttribute("name", "minimize-2");
   }
 
   /**
@@ -109,7 +121,7 @@ export default class ESKitWindowElement extends HTMLElement {
     this._state = "normal";
     this.classList.remove("minimized", "maximized");
     this.#clearSnapClasses();
-    this.shadowRoot.querySelector(".btn-maximize").textContent = "□";
+    this.shadowRoot.querySelector(".btn-maximize eskit-icon")?.setAttribute("name", "square");
 
     if (prev !== "minimized" && this._prevRect) {
       this.#applyRect(this._prevRect);

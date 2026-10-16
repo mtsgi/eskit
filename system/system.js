@@ -5,7 +5,13 @@ import ESKitRegistry    from "./registry.js";
 import ESKitPermissions from "./permissions.js";
 import ESKitShellMode   from "./shell-mode.js";
 import ESKitUsers       from "./users.js";
+import ESKitIcons       from "./icons.js";
 import ESKitLoginScreenElement from "./elements/login-screen/main.js";
+import ESKitIconElement        from "./elements/icon/main.js";
+
+if (!customElements.get("eskit-icon")) {
+  customElements.define("eskit-icon", ESKitIconElement);
+}
 
 if (!customElements.get("eskit-login-screen")) {
   customElements.define("eskit-login-screen", ESKitLoginScreenElement);
@@ -30,6 +36,7 @@ export default class ESKitSystem {
   permissions = new ESKitPermissions();
   shellMode   = new ESKitShellMode();
   users       = new ESKitUsers();
+  icons       = new ESKitIcons();
 
   constructor() {
     window.System      = this;
@@ -164,24 +171,24 @@ export default class ESKitSystem {
       cm.show(e.clientX, e.clientY, [
         this.shellMode.isMobile
           ? {
-              icon: "💠",
+              icon: { set: "lucide", name: "monitor-smartphone" },
               label: "ドロワーを開く",
               action: () => this.WindowSystem?.drawer?.toggle(),
             }
           : {
-              icon: "💠",
+              icon: { set: "lucide", name: "boxes" },
               label: "ランチャーを開く",
               action: () => this.events.emit("launcher:toggle"),
             },
         { separator: true },
         {
-          icon: "🔍",
+          icon: { set: "lucide", name: "search" },
           label: "検索",
           action: () => this.WindowSystem?.beacon?.toggle(),
         },
         { separator: true },
         {
-          icon: "🔄",
+          icon: { set: "lucide", name: "refresh-cw" },
           label: `${this.shellMode.isMobile ? "Desktop" : "Mobile"} モードに切替`,
           action: () => this.setShellMode(this.shellMode.isMobile ? "desktop" : "mobile"),
         },
@@ -235,7 +242,7 @@ export default class ESKitSystem {
     app._windowElement  = windowElement;
 
     app.initialize();
-    this.events.emit("app:opened", { uuid, name: app.name });
+    this.events.emit("app:opened", { uuid, name: app.name, icon: app._manifest?.icon ?? null });
 
     return uuid;
   }
@@ -281,6 +288,7 @@ export default class ESKitSystem {
     return [...this.#process.entries()].map(([uuid, app]) => ({
       uuid,
       name:  app.name,
+      icon:  app._manifest?.icon ?? null,
       state: app._state,
     }));
   }
