@@ -1,32 +1,66 @@
 # ESKit
 
-**ESKit** は、バニラ JavaScript と Web Components で構築されたウェブベースのデスクトップ環境フレームワークです。
+**ESKit** は、バニラ JavaScript と Web Components で構築されたブラウザネイティブのデスクトップ環境フレームワークです。
+
+> **ドキュメント案内:**
+> - **アプリ開発・API リファレンス** → [API.md](API.md)
+> - **アーキテクチャ計画・ロードマップ・ADR** → [PLAN.md](PLAN.md)
+> - **サードパーティライセンス** → [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
+
+---
 
 ## コンセプト
 
-- **ビルド不要** — ビルドツールを一切使用しません。ブラウザネイティブの ES Modules をそのまま活用します
-- **npm 非依存** — `package.json` も `node_modules` も存在しません。静的ファイルを配信するだけで動作します
-- **Web API 活用** — Popover API、View Transitions API、CSS Anchor Positioning など、最新の Web API を積極的に採用します
-- **Web Components** — Custom Elements と Shadow DOM を活用し、再利用可能な UI 部品を構築します
-- **ESKit FS** — OS のファイルシステムを IndexedDB 上に実装します
-- **kitstrap2** — CSS フレームワークを OS 全体に統合。2 層アーキテクチャ (グローバル `<link>` + Shadow DOM `adoptedStyleSheets` Singleton) でダークモード・テーマを自動反映します
+- **ビルド不要・npm 非依存** — `package.json` やバンドラを使わず、ブラウザネイティブの ES Modules と Import Maps で直接動作します
+- **Web API 活用** — Popover API、IndexedDB、Web Crypto API、Service Worker などの標準 Web API を活用します
+- **Web Components** — Custom Elements と Shadow DOM、Constructable StyleSheets でカプセル化された UI を構築します
+- **ESKit FS** — IndexedDB (`eskit-fs`) 上に実装された仮想ファイルシステム (VFS) を提供します
+- **Hamon & kitstrap2** — 軽量シグナル駆動テンプレートエンジン `Hamon`（任意利用）と、Shadow DOM 共有 CSS フレームワーク `kitstrap2` を統合しています
+- **PWA 対応** — `manifest.webmanifest` と Service Worker (`sw.js`) によりインストール・オフライン起動に対応します
+
+---
+
+## クイックスタート（ローカル起動）
+
+ESKit は ES Modules・Import Maps・Service Worker を使用するため、`file://` プロトコルでは動作しません。任意の静的 HTTP サーバーで配信して開いてください。
+
+```bash
+# 例: Python 標準サーバー
+python3 -m http.server 8000
+
+# 例: Node.js (npx) を使う場合
+npx serve .
+```
+
+ブラウザで `http://localhost:8000` を開くと起動します。  
+初回起動時はデフォルトの管理者ユーザー (`admin`) が自動作成され、ログインした状態でデスクトップが開きます。
+
+---
 
 ## アーキテクチャ
 
 ```
 ESKitSystem (window.System)
-├── events      : ESKitEventBus        イベントバス (pub/sub)
-├── fs          : ESKitFileSystem      仮想ファイルシステム (IndexedDB)
-├── registry    : ESKitRegistry        アプリレジストリ
-├── permissions : ESKitPermissions     権限マネージャー
-└── WindowSystem: ESKitWindowSystem    ウィンドウ管理
-    ├── eskit-desktop                  デスクトップ要素
-    ├── eskit-window                   ウィンドウ要素
-    ├── eskit-taskbar                  タスクバー
-    ├── eskit-launcher                 アプリランチャー
-    ├── eskit-context-menu             右クリックコンテキストメニュー
-    ├── eskit-beacon                   グローバル検索オーバーレイ
-    └── eskit-quick-settings           クイック設定パネル
+├── events        : ESKitEventBus             イベントバス (pub/sub)
+├── fs            : ESKitFileSystem           仮想ファイルシステム (IndexedDB)
+├── registry      : ESKitRegistry             アプリレジストリ (ビルトイン / 外部 URL)
+├── permissions   : ESKitPermissions          2 段階権限マネージャー
+├── users         : ESKitUsers                ユーザー / ログインセッション管理
+├── shellMode     : ESKitShellMode            desktop / mobile モード切替
+├── icons         : ESKitIcons                アイコンレジストリ (<eskit-icon>)
+├── theme         : ESKitTheme                テーマ・カラーモード・壁紙管理
+├── i18n          : ESKitI18n                 多言語辞書・リアクティブ翻訳
+├── manifest      : ESKitManifest             define.json バリデーション
+├── notifications : ESKitNotificationsStore   通知履歴ストア
+├── dialog        : ESKitDialogElement        汎用モーダルダイアログ
+└── WindowSystem  : ESKitWindowSystem         ウィンドウ・シェル UI 管理
+    ├── eskit-desktop                         デスクトップルート
+    ├── eskit-window                          アプリウィンドウ
+    ├── eskit-taskbar / eskit-launcher        タスクバー / ランチャー (desktop)
+    ├── eskit-home-bar / eskit-drawer         ホームバー / ドロワー (mobile)
+    ├── eskit-context-menu                    右クリックコンテキストメニュー
+    ├── eskit-beacon                          グローバル検索 (Ctrl/Cmd + Space)
+    └── eskit-quick-settings                  クイック設定パネル
 ```
 
 ### 起動シーケンス
@@ -34,126 +68,123 @@ ESKitSystem (window.System)
 ```
 ESKitSystem.constructor()
   └─ #boot() [async]
-       ├─ fs.init()              IndexedDB を開く
-       ├─ #initDefaultDirs()     /home/user 等を作成
-       ├─ new ESKitWindowSystem  UI 要素を登録
-       ├─ #registerBuiltinApps() ビルトインアプリを登録
-       ├─ initUI()               シェル UI を構築
-       └─ events.emit("system:ready")
+       ├─ fs.init() / users.init()            VFS・ユーザーストア初期化
+       ├─ #initBaseDirs()                     /home, /shared, /system, /apps 等を作成
+       ├─ theme.init() / i18n.init()          テーマ・言語初期化
+       ├─ #ensureDefaultAdmin() / #ensureLogin() 初回 admin 作成・ログイン確認
+       ├─ #initCurrentUserDirs()              ユーザーホーム & サンプルファイル配置
+       ├─ theme.init() / i18n.init()          ユーザー設定の再適用
+       ├─ new ESKitWindowSystem()             シェル UI 要素を構築
+       ├─ #registerBuiltinApps()              ビルトインアプリを登録
+       ├─ registry.loadInstalledApps()        外部インストール済みアプリを復元
+       ├─ initUI() / initPWA()                コンテキストメニュー・PWA 監視を開始
+       └─ events.emit("system:ready")         起動完了通知 (→ System.ready 解決)
 ```
 
-## アプリ開発について
-
-ESKit アプリは、`apps/` ディレクトリ以下に配置されたサブディレクトリごとに定義されます。
-
-各アプリは、マニフェスト (`define.json`) とエントリポイント (`main.js`) を必須とし、必要に応じてテンプレートやスタイルを追加できます。
-
-### 1. ディレクトリ構造
+### ディレクトリ構成
 
 ```
-apps/
-└── myapp/
-    ├── define.json      マニフェスト (必須)
-    ├── main.js          エントリポイント (必須)
-    ├── template.js      HTML テンプレート
-    └── style.js         スタイル
+.
+├── index.html                 エントリ HTML (Import Map 定義)
+├── main.js                    ブートスクリプト (初期アプリ起動)
+├── manifest.webmanifest       PWA マニフェスト
+├── sw.js                      PWA Service Worker (Network-First)
+├── icons/                     PWA アイコン
+├── system/                    OS コア・サービス・Web Components
+│   ├── system.js / app.js     ESKitSystem / ESKitApp 基底クラス
+│   ├── hamon.js               リアクティブテンプレートエンジン
+│   ├── filesystem.js / ...    各サブシステム (users, permissions, registry, theme, i18n, icons)
+│   ├── kitstrap2.css / .js    共有 CSS フレームワーク
+│   ├── i18n/                  システム多言語辞書 (ja.json, en.json)
+│   └── elements/              各種 Custom Elements (window, desktop, dialog, file-picker 等)
+└── apps/                      組み込みアプリケーション
 ```
 
-### 2. マニフェスト (`define.json`)
+---
+
+## アプリ開発の概要
+
+アプリは `apps/<name>/` ディレクトリ（または HTTPS でホストされた外部ディレクトリ）に配置し、マニフェスト (`define.json`) とエントリポイント (`main.js`) を用意して作成します。
+
+```
+apps/myapp/
+├── define.json      マニフェスト (必須)
+├── main.js          エントリポイント (必須)
+├── style.js         CSS スタイル (任意)
+└── i18n/            多言語辞書 (任意: ja.json, en.json)
+```
+
+### 1. マニフェスト (`define.json`)
 
 ```json
 {
   "id": "com.example.myapp",
-  "name": "My App",
+  "name": { "ja": "マイアプリ", "en": "My App" },
   "entry": "main.js",
   "version": "1.0.0",
   "description": "アプリの説明",
+  "icon": { "type": "set", "set": "lucide", "name": "sparkles" },
   "permissions": ["fs.read", "notifications"]
 }
 ```
 
-利用可能な権限・フィールドの詳細は [API.md](API.md) を参照してください。
+### 2. アプリクラス (`main.js`)
 
-### 3. アプリクラス (`main.js`)
-
-> **ES Modules に関する注意:** `index.html` は `type="module"` で動作するため、モジュール内では
-> `System` 識別子は自動的に解決されません。`window.System` / `globalThis.System` を直接参照するか、
-> ファイル先頭で `const System = globalThis.System;` を宣言してください。
+> **ES Modules に関する注意:** `index.html` は `type="module"` で動作するため、`System` はファイル先頭で `const System = globalThis.System;` と宣言するか `globalThis.System` 経由で参照してください。
 
 ```js
 import ESKitApp from "system/app.js";
-import template from "./template.js";
-import style from "./style.js";
-
-const System = globalThis.System;  // ES モジュール内では必須
+import hamon from "system/hamon.js";
+import { css } from "system/util.js";
 
 export default class MyApp extends ESKitApp {
-  static template = template;
-  static style = style;
+  static style = css`
+    .wrap { padding: 1rem; display: grid; gap: 0.75rem; }
+  `;
+
+  constructor() {
+    super();
+    const count = this.hamon.signal(0);
+    this.template = hamon`
+      <div class="wrap">
+        <p>Count: ${() => count.value}</p>
+        <button class="kit-button -primary" @click=${() => count.value++}>
+          カウントアップ
+        </button>
+      </div>
+    `;
+  }
 
   initialize() {
-    // アプリ起動時に呼ばれる (_uuid, _windowElement がセット済み)
-    this.setTitle("My App");
-    const btn = this.querySelector("button");
-    btn.addEventListener("click", async () => {
-      await this.showNotification({ title: "Hello!", message: "クリックされました" });
-    });
+    // ウィンドウ準備完了後に呼ばれる
   }
-
-  close() {
-    // アプリ終了時のクリーンアップ (タイマー解除など)
-  }
-
-  onFocus()               { /* ウィンドウがフォーカスされた */ }
-  onBlur()                { /* フォーカスが外れた */ }
-  onResize(width, height) { /* リサイズされた */ }
-  onMinimize()            { /* 最小化された */ }
-  onRestore()             { /* 復元された */ }
-  onMessage(data)         { /* 別アプリからの IPC メッセージ */ }
 }
 ```
 
-### 4. テンプレート / スタイル
+静的テンプレートには `system/util.js` の `html` タグ関数も利用できます。`this.fs`・`this.showNotification()`・`this.t()`・`this.onOpenFile()` など全 API の詳細は **[API.md](API.md)** を参照してください。
 
-```js
-// template.js
-import { html } from "system/util.js";
-const label = "Click me";
-export default html`<button>${label}</button><p class="output"></p>`;
-
-// style.js
-import { css } from "system/util.js";
-export default css`
-  button { background: var(--eskit-color-primary); color: #fff; padding: 0.5rem 1rem; }
-`;
-```
-
-## APIリファレンス
-
-詳細な API ドキュメントは **[API.md](API.md)** を参照してください。
-
-`System`, `System.fs`, `System.events`, `System.registry`, `System.permissions`, `ESKitApp` の全 API・権限モデル・外部アプリインストールを網羅しています。
+---
 
 ## 組み込みアプリ
 
 | アプリ | ディレクトリ | 説明 | 状態 |
 |--------|------------|------|------|
-| TestApp | `apps/test/` | 開発用テスト | ✅ |
-| WelcomeApp | `apps/welcome/` | ようこそ画面 | ✅ |
-| Settings | `apps/settings/` | テーマ・言語・権限管理 | Phase 5 |
-| Notepad | `apps/notepad/` | テキストエディタ (仮想 FS 対応) | Phase 6 |
-| Calculator | `apps/calculator/` | 電卓 | Phase 6 |
-| Clock | `apps/clock/` | 時計 / ストップウォッチ / タイマー | Phase 6 |
-| File Manager | `apps/filemanager/` | 仮想 FS ブラウザ | Phase 6 |
+| **SystemVerifier** (`TestApp`) | `apps/test/` | システム API・UI 検証用アプリ | ✅ 実装済み |
+| **Welcome** | `apps/welcome/` | ようこそ画面 | ✅ 実装済み |
+| **ESKish** | `apps/eskish/` | EcmaScript 風コマンドを備えたターミナル環境 | ✅ 実装済み |
+| **Settings** | `apps/settings/` | 外観・言語・通知・プロセス・権限の管理 | ✅ 実装済み |
+| **Notepad** | `apps/notepad/` | 仮想 FS / PC ダウンロード対応テキストエディタ | ✅ 実装済み |
+| **Calculator** | `apps/calculator/` | 四則演算電卓（キーボード対応） | ✅ 実装済み |
+| **Clock** | `apps/clock/` | 世界時計・ストップウォッチ・タイマー | ✅ 実装済み |
+| **File Manager** | `apps/filemanager/` | 仮想 FS ブラウザ・ファイル送受信 | ✅ 実装済み |
 
-## ロードマップ
+---
+
+## 開発状況とロードマップ
 
 | Phase | 内容 | 状態 |
 |-------|------|------|
-| 1 | コア基盤 (EventBus / IndexedDB VFS / 権限モデル / Registry) | ✅ 実装済み |
-| 2 | ウィンドウ管理 (ドラッグ / リサイズ / スナップ / Z-order) | ✅ 実装済み |
-| 3 | デスクトップシェル (コンテキストメニュー / グローバル検索 / クイック設定) | ✅ 実装済み |
-| 3.5 | Hamon リアクティブテンプレートエンジン | ✅ 実装済み |
-| 4 | ユーザー基盤 (ログイン / ユーザー分離 / 権限分離) | 🚧 着手中 |
-| 5 | システムサービス (通知 / テーマ / i18n / 設定アプリ) | 予定 |
-| 6 | 開発者体験 (サンプルアプリ / 外部インストール) | 予定 |
+| Phase 1〜6 | コア基盤・ウィンドウ管理・シェル UI・Hamon・マルチユーザー・ESKish・Icon・システムサービス・PWA・サンプルアプリ | ✅ 実装済み |
+| Phase 7〜12 | 棚卸しと ADR・Boot Recovery・Core/AppContext 分離・Scoped Permissions・Intent/Lifecycle・kitstrap2 同期・Browser Native テスト・eskpt/Store 連携 | 📋 計画中 |
+
+各 Phase の詳細仕様・設計判断 (ADR)・課題の優先順位は **[PLAN.md](PLAN.md)** を参照してください。

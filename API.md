@@ -1,953 +1,391 @@
 # ESKit API リファレンス
 
-> [← README に戻る](README.md)
+> [← README に戻る](README.md) | [設計計画・ロードマップ (PLAN.md) →](PLAN.md)
+
+このドキュメントは ESKit の **アプリ開発者向け API**、**UI・テンプレート API**、**システムコア API**、**組み込みアプリ仕様** を役割別に整理したリファレンスです。
 
 ---
 
-## `System` (グローバル)
+## 目次
 
-`window.System` としてグローバルに公開される ESKitSystem のインスタンスです。
+- **1. アプリ開発者向けガイド**
+  - [1.1 `define.json` — アプリマニフェスト](#11-definejson--アプリマニフェスト)
+  - [1.2 `ESKitApp` — アプリ基底クラス](#12-eskitapp--アプリ基底クラス)
+  - [1.3 ファイル関連付けと起動引数 (`System.openFile`)](#13-ファイル関連付けと起動引数-systemopenfile)
+  - [1.4 アプリ多言語化 (App i18n)](#14-アプリ多言語化-app-i18n)
+  - [1.5 権限モデル](#15-権限モデル)
+- **2. UI・テンプレート・コンポーネント**
+  - [2.1 `Hamon` — リアクティブテンプレートエンジン](#21-hamon--リアクティブテンプレートエンジン)
+  - [2.2 `System.icons` & `<eskit-icon>`](#22-systemicons--eskit-icon)
+  - [2.3 `System.dialog` & `System.showOpenFilePicker`](#23-systemdialog--systemshowopenfilepicker)
+  - [2.4 `System.notifications` & `System.notify`](#24-systemnotifications--systemnotify)
+- **3. システムコア・サービス API**
+  - [3.1 `System` (グローバル) & `System.ready`](#31-system-グローバル--systemready)
+  - [3.2 `System.fs` — 仮想ファイルシステム](#32-systemfs--仮想ファイルシステム)
+  - [3.3 `System.users` — ユーザー / セッション](#33-systemusers--ユーザー--セッション)
+  - [3.4 `System.registry` — アプリレジストリ & 外部アプリインストール](#34-systemregistry--アプリレジストリ--外部アプリインストール)
+  - [3.5 `System.permissions` — 権限マネージャー](#35-systempermissions--権限マネージャー)
+  - [3.6 `System.events` — イベントバス & システムイベント一覧](#36-systemevents--イベントバス--システムイベント一覧)
+  - [3.7 `System.theme` — テーマ & 外観管理](#37-systemtheme--テーマ--外観管理)
+  - [3.8 `System.i18n` — 多言語対応サービス](#38-systemi18n--多言語対応サービス)
+  - [3.9 `System.shellMode` — シェルモード](#39-systemshellmode--シェルモード)
+  - [3.10 `System.WindowSystem` & `ESKitWindowElement`](#310-systemwindowsystem--eskitwindowelement)
+  - [3.11 PWA & Service Worker](#311-pwa--service-worker)
+- **4. 組み込みアプリリファレンス**
+  - [4.1 `ESKish` — 標準ターミナル環境](#41-eskish--標準ターミナル環境)
+  - [4.2 `Settings` — システム設定アプリ](#42-settings--システム設定アプリ)
+  - [4.3 標準サンプルアプリ一覧](#43-標準サンプルアプリ一覧)
 
-> **Note (ES Modules):** `index.html` は `type="module"` で動作するため、モジュール内では
-> `window.System` / `globalThis.System` を直接参照するか、ファイル先頭で
-> `const System = globalThis.System;` を宣言してから使用してください。
+---
 
-```js
-const System = globalThis.System;
+## 1. アプリ開発者向けガイド
 
-await System.loadApp("apps/myapp/");         // アプリを起動 → UUID を返す
-System.closeApp(uuid);                        // アプリを終了
-System.getApp(uuid);                          // アプリインスタンスを取得
-System.listProcesses();                       // [{uuid, name, icon, state}, ...]
-System.notify({ title, message, duration });  // notification:show イベントを発行
-System.sendMessage(targetUuid, data);         // アプリ間 IPC
-System.setShellMode("desktop" | "mobile" | "auto"); // シェルモード切替 ("auto" で自動検出復帰)
-System.nextZIndex();                          // フォーカス用 z-index を取得 (呼ぶたびに増加)
-System.generateUUID();                        // crypto.randomUUID() のラッパー
-System.currentUser;                           // 現在ログイン中ユーザー ({id, name, isAdmin, createdAt} | null)
-System.homeDir();                             // 現在ユーザーのホームパス (例: "/home/alice")
-System.homeDir("bob");                        // 指定ユーザーのホームパス
-System.logout();                              // ログアウトしてログイン画面に戻る
+### 1.1 `define.json` — アプリマニフェスト
 
-// サブシステムへのアクセス
-System.events        // ESKitEventBus
-System.fs            // ESKitFileSystem
-System.registry      // ESKitRegistry
-System.permissions   // ESKitPermissions
-System.users         // ESKitUsers
-System.shellMode     // ESKitShellMode
-System.icons         // ESKitIcons
-System.theme         // ESKitTheme (Phase 5)
-System.i18n          // ESKitI18n (Phase 5)
-System.dialog        // ESKitDialogElement ファサード (Phase 5)
-System.notifications // ESKitNotificationsStore (Phase 5)
-System.WindowSystem  // ESKitWindowSystem (ブート後)
+各アプリのルートディレクトリに配置する JSON ファイルです。
+
+```json
+{
+  "id": "com.example.myapp",
+  "name": {
+    "ja": "マイアプリ",
+    "en": "My App"
+  },
+  "description": {
+    "ja": "アプリの説明",
+    "en": "App description"
+  },
+  "entry": "main.js",
+  "version": "1.0.0",
+  "icon": {
+    "type": "set",
+    "set": "lucide",
+    "name": "sparkles"
+  },
+  "permissions": ["fs.read", "notifications"],
+  "fileAssociations": [".txt", ".md"],
+  "i18n": "./i18n/"
+}
 ```
 
-### `System.ready`
+| フィールド | 必須 | 型 | 説明 |
+|---------|------|----|------|
+| `id` | ✅ | `string` | 一意なリバースドメイン形式の ID |
+| `name` | ✅ | `string \| Record<string, string>` | 表示名（多言語オブジェクトも可） |
+| `entry` | ✅ | `string` | エントリポイント JS ファイル名 |
+| `version` | — | `string` | バージョン文字列（省略時 `"0.0.1"`） |
+| `description` | — | `string \| Record<string, string>` | アプリの説明（省略時 `""`） |
+| `icon` | — | `object` | `{ type: "set", set?: "lucide", name }` または `{ type: "image", src }` |
+| `permissions` | — | `string[]` | 要求権限の配列 |
+| `fileAssociations` | — | `string[]` | 関連付けるファイル拡張子（例: `[".txt", ".md"]`、先頭 `.` は自動正規化） |
+| `i18n` | — | `string` | アプリ固有辞書ディレクトリ（省略時 `"./i18n/"`） |
 
-ブート完了を待てる Promise です。`system:ready` イベントが発火するまで解決しません。
+---
+
+### 1.2 `ESKitApp` — アプリ基底クラス
+
+すべての ESKit アプリは `system/app.js` の `ESKitApp` を継承します。
+
+#### アプリの定義パターン
 
 ```js
-await System.ready;
-console.log(System.currentUser); // { id, name, isAdmin, createdAt }
+import ESKitApp from "system/app.js";
+import hamon from "system/hamon.js";
+import { css } from "system/util.js";
+
+export default class MyApp extends ESKitApp {
+  static style = css`
+    h1 { color: var(--kit-color-primary); }
+  `;
+
+  constructor() {
+    super();
+    const count = this.hamon.signal(0);
+    this.template = hamon`
+      <h1>Hello, ESKit!</h1>
+      <button id="btn" @click=${() => count.value++}>
+        Count: ${() => count.value}
+      </button>
+    `;
+  }
+
+  initialize() {
+    // _uuid, _manifest, _windowElement が注入された後に呼ばれる
+  }
+
+  close() {
+    // アプリ終了直前のクリーンアップ (タイマー停止など)
+  }
+}
+```
+
+静的 HTML を使う場合は `static template = html`...``（`system/util.js`）も指定できます。
+
+#### ライフサイクルとフック
+
+`System.loadApp(appDir, options)` は以下の順序でアプリを起動します。
+
+1. `new AppClass()`（コンストラクタ）
+2. `_uuid`, `_manifest`, `launchData`, `_windowElement` を注入し、自動タイトル同期を開始
+3. `app.initialize()` を**同期呼び出し**（`async initialize()` の完了は待機しません）
+4. `options.filePath` があり `onOpenFile` が定義されていれば `await app.onOpenFile(options.filePath)` を実行
+5. 終了されていないことを確認して `app:opened` イベントを発行
+
+| フック | 呼ばれるタイミング / 現状 |
+|--------|------------------------|
+| `initialize()` | `_uuid`, `_manifest`, `_windowElement` 注入後 |
+| `onOpenFile(filePath)` | `System.openFile()` 等でファイルパス付き起動された直後 |
+| `close()` | アプリ終了直前（`closeApp()` から同期呼び出し） |
+| `onMessage(data)` | `System.sendMessage()` で IPC データを受信したとき |
+| `onFocus()` / `onBlur()` / `onResize(w, h)` / `onMinimize()` / `onRestore()` | ※ 将来の Lifecycle 統合用の予約フック（現行の `ESKitWindowSystem` からは自動発火されません） |
+
+#### 開発者 API
+
+```js
+// UI・タイトル・ダイアログ
+this.setTitle(title)                  // 文字列 / getter 関数 / Hamon Signal を指定可能
+this.querySelector(selector)          // Shadow DOM 内の要素を取得
+this.querySelectorAll(selector)       // Shadow DOM 内の要素を全取得
+this.t(key, vars)                     // 多言語翻訳 (アプリ名前空間を優先補完)
+await this.confirm(opts)              // System.dialog.confirm() のショートハンド
+await this.alert(opts)                // System.dialog.alert() のショートハンド
+await this.prompt(opts)               // System.dialog.prompt() のショートハンド
+await this.showOpenFilePicker(opts)   // System.showOpenFilePicker() のショートハンド
+
+// システム連携 (マニフェストの permissions 宣言 + ユーザー許可が必要)
+await this.showNotification(opts)     // permissions: "notifications"
+await this.sendMessage(targetUuid, data) // permissions: "ipc"
+await this.listProcesses()            // permissions: "system.info"
+
+// 仮想ファイルシステムファサード (マニフェストの permissions と連動)
+await this.fs.readFile(path)          // permissions: "fs.read"
+await this.fs.readFileAsBytes(path)   // permissions: "fs.read"
+await this.fs.readdir(path)           // permissions: "fs.read"
+await this.fs.stat(path)              // permissions: "fs.read"
+await this.fs.exists(path)            // permissions: "fs.read"
+await this.fs.writeFile(path, data)   // permissions: "fs.write"
+await this.fs.mkdir(path, opts)       // permissions: "fs.write"
+await this.fs.remove(path, opts)      // permissions: "fs.write"
+await this.fs.rename(oldPath, newPath)// permissions: "fs.write"
+```
+
+#### プロパティ
+
+| プロパティ | 説明 |
+|----------|------|
+| `this.name` | 現在のウィンドウタイトル文字列 |
+| `this.windowTitle` | `this.name` を返すゲッター |
+| `this.manifest` | 全階層をコピー・`Object.freeze` した読み取り専用 `Manifest`（起動前は `null`） |
+| `this.launchData` | `loadApp(dir, options)` に渡された `options` オブジェクト（例: `{ filePath }`） |
+| `this.hamon` | アプリ専用の `HamonScope`（アプリ終了時に自動 `dispose()`） |
+| `this._uuid` | アプリインスタンス固有の UUID |
+| `this._manifest` | 内部用 Manifest オブジェクト |
+| `this._state` | `"initializing"` / `"running"` / `"closed"` |
+| `this._windowElement` | 対応する `<eskit-window>` 要素 |
+
+---
+
+### 1.3 ファイル関連付けと起動引数 (`System.openFile`)
+
+拡張子に応じたアプリを自動検出し、`{ filePath }` 付きで起動します。
+
+```js
+await System.openFile("/home/admin/desktop/Welcome.txt");
+```
+
+- 関連付けられたアプリが見つからない場合でも、テキスト系拡張子（`.txt`, `.md`, `.json`, `.js`, `.css`, `.html`, `.csv`, `.log`, `.xml`, `.yaml`, `.yml`, 拡張子なし）は `apps/notepad/` にフォールバックします。
+- それでも開けるアプリがない場合はアラートダイアログを表示し、`null` を返します（起動成功時は `Promise<string>` の UUID を返します）。
+
+```js
+export default class NotepadApp extends ESKitApp {
+  initialize() {
+    // UI 初期化のみ（ここで launchData.filePath を二重読込しない）
+  }
+
+  async onOpenFile(filePath) {
+    const text = await this.fs.readFile(filePath);
+    // ファイル内容を表示
+  }
+}
 ```
 
 ---
 
-## `System.users` — ユーザー / セッション
+### 1.4 アプリ多言語化 (App i18n)
 
-ユーザー管理とログインセッションを扱う `ESKitUsers` インスタンスです。
+#### マニフェストと辞書ファイル
 
-```js
-System.users.hasUsers();
-System.users.list();
-System.users.getCurrent();
+`define.json` の `name`・`description` に言語別オブジェクトを指定でき、`apps/<name>/i18n/{lang}.json` を配置すると `loadApp()` 時に自動読み込みされます。
 
-await System.users.create({
-  id: "alice",
-  name: "Alice",
-  password: "password123",
-  isAdmin: false,
-});
-
-await System.users.login("alice", "password123");
-await System.users.delete("alice");
-System.users.logout();
+```json
+// apps/notepad/i18n/ja.json
+{
+  "file": "ファイル",
+  "save": "保存",
+  "unsaved": "未保存の変更があります"
+}
 ```
 
-### ユーザー仕様
+#### `this.t()` とウィンドウタイトル自動同期
 
-- ユーザー ID は英小文字で始まる 1〜31 文字（英小文字・数字・`_`・`-`）です
-- 初回起動時は管理者ユーザー作成が必須です
-- `isAdmin: true` での作成および `delete()` による削除は管理者ユーザーのみ実行可能です（特権昇格・不正削除防止）
-- セッションは `localStorage` に保持されます
-- パスワードは PBKDF2 (SHA-256) でハッシュ化して保存されます
-- 最後の管理者ユーザーは削除できません
+`this.t(key, vars)` はドットを含まないキーの場合、アプリ自身の短縮 ID（例: `eskit.notepad` → `notepad`）を名前空間として優先解決し、見つからなければシステム辞書へフォールバックします。
+
+```js
+this.t("save");         // => "保存" (notepad.save を優先解決)
+this.t("notepad.save"); // => "保存"
+this.t("dialog.ok");    // => "OK" (システム共通辞書)
+```
+
+- `this.setTitle()` を呼ばない場合、ウィンドウタイトルは現在の言語に応じた `define.json` の `name` と自動同期されます。
+- `this.setTitle(fnOrSignal)` にリアクティブな値（関数または Hamon Signal）を渡すと、言語やファイル名に応じてタイトルを自動更新できます。
+
+```js
+this.setTitle(() => `${this.filePath.value || "Untitled"} - ${this.t("name")}`);
+```
 
 ---
 
-## `System.shellMode` — シェルモード
+### 1.5 権限モデル
 
-デスクトップ/モバイルの動作モードを管理する `ESKitShellMode` のインスタンスです。
+ESKit はアプリからの API 利用に対し、協調的な 2 段階権限モデルを採用しています。
 
-```js
-System.shellMode.current;   // "desktop" | "mobile"
-System.shellMode.isDesktop; // boolean
-System.shellMode.isMobile;  // boolean
-System.shellMode.isLocked;  // boolean — 手動設定中は true、自動検出中は false
-
-System.shellMode.set("mobile"); // 手動でモードを設定 (MediaQuery 自動検出を停止)
-System.shellMode.unlock();      // 自動検出を再開し、ビューポートに応じたモードに戻す
+```
+Install-time チェック (define.json の permissions[] 宣言)
+  ├─ 宣言あり → Runtime チェック (System.permissions.check)
+  │                ├─ localStorage にユーザー別の許可/拒否記録あり → 即許可 / 即拒否
+  │                └─ 初回アクセス → <eskit-permission-dialog> でユーザー確認 → 記録
+  └─ 宣言なし → 即拒否
 ```
 
-モード変更時は `"shell:mode-changed"` イベントが発行されます。`System.setShellMode()` は `shellMode.set()` / `shellMode.unlock()` ("auto" 指定時) の便利なショートハンドです。
+> **信頼モデルに関する注意:** ESKit の組み込みアプリ・外部アプリは同一 JavaScript Realm で実行されます。権限モデル・`ESKitApp.fs` ラッパー・ローカルユーザー認証は、協調的なアプリの API 利用とユーザー操作を管理するためのものであり、悪意あるコードによるブラウザ標準 API（直接 `fetch` / `navigator.clipboard` / `window.System` / `IndexedDB`）の呼び出しを物理的に遮断するセキュリティ境界ではありません。
 
-| モード | 説明 |
-|--------|------|
-| `"desktop"` | 複数ウィンドウのカード形式。タスクバー・ランチャーが表示される |
-| `"mobile"` | 1 画面 1 アプリの全画面形式。ホームバー・ドロワーが表示される |
+#### 利用可能な権限
+
+| 権限 | 対象と現行の制約 |
+|------|-----------------|
+| `fs.read` | `this.fs` の読み取り系メソッド（`readFile`, `readFileAsBytes`, `readdir`, `stat`, `exists`） |
+| `fs.write` | `this.fs` の書き込み系メソッド（`writeFile`, `mkdir`, `remove`, `rename`） |
+| `fs.read.all` / `fs.write.all` / `fs.shared` | マニフェスト宣言は受理。アプリ向けパススコープの細かい制御は今後の改善対象 |
+| `notifications` | `this.showNotification()` |
+| `ipc` | `this.sendMessage()` |
+| `system.info` | `this.listProcesses()` |
+| `user.info` / `user.manage` | ユーザー情報の参照・管理操作の宣言 |
+| `network` | マニフェスト宣言は受理（現状 Native `fetch()` を強制遮断する仕組みはありません） |
+| `clipboard` | マニフェスト宣言は受理（現状 `navigator.clipboard` を強制遮断する仕組みはありません） |
 
 ---
 
-## `System.icons` — アイコンレジストリ & `<eskit-icon>`
+## 2. UI・テンプレート・コンポーネント
 
-アイコンセット（Icon Set）を管理し、SVG アイコンを描画する `ESKitIcons` インスタンスおよび Web Component です。
+### 2.1 `Hamon` — リアクティブテンプレートエンジン
+
+`system/hamon.js` — VDOM を使わないシグナル方式のリアクティブテンプレートエンジンです。
 
 ```js
-// アイコンの存在確認と SVG 内部コンテンツ取得
+import hamon, { signal, computed, effect, list, isSignal, HamonScope } from "system/hamon.js";
+```
+
+#### リアクティブプリミティブ
+
+| API | 用途 | 例 |
+|-----|------|----|
+| `signal(initial)` | 読み書き可能なリアクティブ値 | `const n = signal(0); n.value++; n.peek();` |
+| `computed(fn)` | 依存元から自動再計算される読み取り専用 Signal | `const double = computed(() => n.value * 2);` |
+| `effect(fn)` | 依存 Signal 変化時に再実行（戻り値関数でクリーンアップ） | `const dispose = effect(() => { ... });` |
+| `isSignal(v)` | Signal オブジェクトか判定 | `isSignal(n) // true` |
+
+#### `hamon` タグ付きテンプレート
+
+リアクティブな `DocumentFragment`（`_scope: HamonScope` 付き）を返します。
+
+```js
+const count = signal(0);
+const show = signal(true);
+const items = signal(["Apple", "Banana"]);
+
+const fragment = hamon`
+  <button @click=${() => count.value++} :disabled=${() => count.value > 10}>
+    Count: ${() => count.value}
+  </button>
+  <div kit-if=${() => show.value}>表示中</div>
+  <div kit-else>非表示</div>
+  <ul>
+    ${list(() => items.value, (item) => hamon`<li>${item}</li>`)}
+  </ul>
+`;
+```
+
+- **テキスト補間:** `${value}`（静的）、`${() => expr}` / `${signalObj}`（リアクティブ更新。戻り値が `Node` / `DocumentFragment` の場合は DOM 挿入）。
+- **イベントバインディング (`@event`):** `@click=${handler}` 形式で登録し、`_scope.dispose()` 時に自動 `removeEventListener` されます。
+- **属性バインディング (`:attr`):** 動的な属性は必ず `:attr=${value}` の形式で指定してください。`title=${value}` や `class="prefix ${value}"` のような構文はコンパイル時に `TypeError` となります。
+  - `value`, `checked`, `selected`, `disabled` は DOM プロパティに直接代入され、その他は `setAttribute` / `removeAttribute` で反映されます（`false` / `null` で属性削除、`true` で空属性）。
+- **条件分岐 (`kit-if` / `kit-else`):** Comment ノードをアンカーに DOM 挿入・除去を行います（要素ノード自体は保持）。`kit-else` は直前の `kit-if` 要素の次の兄弟要素として記述します。
+- **リスト描画 (`list(itemsFn, renderFn)`):** 配列変化時に再レンダリングし、前回の各アイテム `_scope` を自動 `dispose()` します。
+
+#### `HamonScope` と `ESKitApp` 統合
+
+```js
+const scope = new HamonScope();
+const count = scope.signal(0);
+scope.effect(() => console.log(count.value));
+scope.onDispose(() => { /* cleanup */ });
+scope.dispose(); // 追跡中の effect とコールバックを一括解除
+```
+
+`ESKitApp` 内では `this.hamon` を使うことで、アプリ終了時（`closeApp()`）にすべての `effect` / イベントリスナー / `onDispose` が自動解放されます。
+
+---
+
+### 2.2 `System.icons` & `<eskit-icon>`
+
+アイコンセット（標準で Lucide Icons を内蔵）を管理し、SVG アイコンを描画します。
+
+```js
 System.icons.has("lucide", "search");  // true
-System.icons.get("lucide", "search");  // '<circle cx="11" cy="11" r="8"/>...'
-
-// アイコンセット一覧とアイコン一覧
+System.icons.get("lucide", "search");  // SVG 内部文字列
 System.icons.listSets();               // ["lucide"]
 System.icons.listIcons("lucide");      // ["minus", "square", "search", ...]
 
-// 独自アイコンセットの登録 (アプリ・プラグイン拡張)
+// 独自アイコンセットの登録
 System.icons.registerSet("my-icons", {
-  "custom-star": '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
+  "custom-star": '<polygon points="12 2 ..."/>',
 });
 
-// マニフェスト icon 定義から DOM 要素を生成
+// マニフェストの icon 定義から DOM 要素を生成
 const appIcon = System.icons.createAppIcon(manifest.icon, { size: 24 });
 ```
 
-### `<eskit-icon>` Web Component
+#### `<eskit-icon>` と `icon()` ヘルパー
 
 ```html
 <eskit-icon set="lucide" name="search" size="18"></eskit-icon>
 <eskit-icon set="lucide" name="x" size="14" stroke-width="2.5" color="#ef4444"></eskit-icon>
 ```
 
-| 属性 | 型 | デフォルト | 説明 |
-|------|----|-----------|------|
-| `set` | string | `"lucide"` | アイコンセット名 |
-| `name` | string | (必須) | アイコン名 |
-| `size` | string/number | `1em` | サイズ（数値の場合は `px` 単位） |
-| `stroke-width` | string/number | `2` | 線の太さ |
-| `color` | string | `currentColor` | アイコン色 |
-
-### `icon(set, name, options)` ヘルパー関数
-
-Hamon テンプレートや動的 DOM 構築で利用できるヘルパー関数です。`<eskit-icon>` DOM 要素を返します。
+| 属性 | デフォルト | 説明 |
+|------|-----------|------|
+| `set` | `"lucide"` | アイコンセット名 |
+| `name` | (必須) | アイコン名 |
+| `size` | `"1em"` | サイズ（数値指定時は `px` 単位） |
+| `stroke-width` | `"2"` | 線の太さ |
+| `color` | `"currentColor"` | 描画色 |
 
 ```js
 import { icon } from "system/icons.js";
 
-// Hamon テンプレート内
-const template = hamon`
+const btn = hamon`
   <button class="kit-button">
     ${icon("lucide", "sparkles", { size: 16 })}
-    <span>クリック</span>
+    <span>実行</span>
   </button>
 `;
 ```
 
 ---
 
-## `System.WindowSystem` — シェル UI 要素
+### 2.3 `System.dialog` & `System.showOpenFilePicker`
 
-ウィンドウとシェル要素を管理する `ESKitWindowSystem` のインスタンスです。ブート完了後にアクセスできます。
-
-```js
-System.WindowSystem.activeUuid;      // 現在フォーカス中のウィンドウ UUID
-System.WindowSystem.getElement(uuid); // UUID から eskit-window 要素を取得
-System.WindowSystem.activateWindow(uuid); // ウィンドウをアクティブにする (desktop: 最前面 / mobile: 全画面)
-System.WindowSystem.getAllElements(); // 全ウィンドウ要素の配列
-```
-
-### シェル UI 要素へのアクセス
-
-| プロパティ | 要素 | 説明 |
-|-----------|------|------|
-| `WindowSystem.contextMenu` | `<eskit-context-menu>` | 右クリックコンテキストメニュー |
-| `WindowSystem.beacon` | `<eskit-beacon>` | グローバル検索オーバーレイ |
-| `WindowSystem.quickSettings` | `<eskit-quick-settings>` | クイック設定パネル |
-| `WindowSystem.taskbar` | `<eskit-taskbar>` | タスクバー (desktop のみ) |
-| `WindowSystem.launcher` | `<eskit-launcher>` | ランチャー (desktop のみ) |
-| `WindowSystem.drawer` | `<eskit-drawer>` | アプリドロワー (mobile のみ) |
-| `WindowSystem.homeBar` | `<eskit-home-bar>` | ホームバー (mobile のみ) |
-
-### `ESKitContextMenuElement`
-
-```js
-const cm = System.WindowSystem.contextMenu;
-
-cm.show(x, y, items); // 座標 (clientX/Y) 指定でメニューを表示
-cm.hide();            // メニューを閉じる
-
-// items の形式:
-// { label: string, action: () => void, icon?: string }
-// { separator: true }
-```
-
-- Popover API (`popover="manual"`) で表示。画面端を自動補正して位置調整します。
-- 外側クリック / Escape キーで自動的に閉じます。
-
-### `ESKitBeaconElement` — グローバル検索
-
-```js
-const beacon = System.WindowSystem.beacon;
-
-beacon.show();   // 検索オーバーレイを開く
-beacon.hide();   // 閉じる
-beacon.toggle(); // 開閉トグル
-```
-
-- `Ctrl+Space` / `Cmd+Space` でグローバルに toggle されます。
-- `System.registry.search(query)` でアプリをリアルタイム検索。
-- `↑` / `↓` キーで候補選択、`Enter` で起動、`Escape` で閉じます。
-
-### `ESKitQuickSettingsElement`
-
-```js
-const qs = System.WindowSystem.quickSettings;
-
-qs.show();   // パネルを開く
-qs.hide();   // 閉じる
-qs.toggle(); // 開閉トグル
-```
-
-- タスクバーの時計クリックで呼び出されます。
-- モバイルモードではドロワー上部の ⚙️ ボタンからも開けます。
-- モバイル時は画面上部に全幅で表示されます。
-
----
-
-## `ESKitWindowElement` — アプリウィンドウ
-
-すべてのアプリウィンドウは `<eskit-window>` カスタム要素で管理されます。`ESKitApp._windowElement` から参照できます。
-
-### ウィンドウ操作
-
-```js
-const win = app._windowElement;
-
-win.focus();         // ウィンドウを最前面にフォーカスする
-win.minimize();      // 最小化
-win.maximize();      // 最大化
-win.restore();       // 通常状態に復元 (最小化・最大化・スナップから)
-win.snap("left");    // 画面左半分にスナップ
-win.snap("right");   // 画面右半分にスナップ
-win.setTitle(title); // タイトルバーのテキストを更新
-```
-
-### 状態・属性
-
-| プロパティ | 型 | 説明 |
-|-----------|-----|------|
-| `win._state` | `"normal"\|"minimized"\|"maximized"` | 現在のウィンドウ状態 |
-| `win._prevRect` | `{left, top, width, height}\|null` | 最大化・スナップ前の位置とサイズ |
-
-| 属性 | 説明 |
-|------|------|
-| `mode="desktop"\|"mobile"` | シェルモードに連動して自動更新 |
-| `active` | mobile モードで全画面表示するとき付与 |
-
-### ドラッグ・リサイズ
-
-- **ドラッグ:** タイトルバー (`.app-header`) を掴んでウィンドウを移動。最大化中はドラッグ不可。
-- **タイトルバーダブルクリック:** 最大化 / 復元トグル。
-- **リサイズ:** 8 方向ハンドル (N/S/E/W/NE/NW/SE/SW) でリサイズ。最小サイズ: 幅 220px / 高さ 120px。
-- **スナッププレビュー:** ドラッグ中に画面端に近づくと半透明のプレビューを表示。`pointerup` 時にスナップを確定。
-  - 上端 (y ≤ 8px) → `maximize()`
-  - 左端 (x ≤ 8px) → `snap("left")`
-  - 右端 (x ≥ innerWidth - 8px) → `snap("right")`
-
----
-
-## `System.fs` — 仮想ファイルシステム
-
-IndexedDB 上に実装されたファイルシステム (`ESKitFileSystem`) です。
-
-> **Note (アプリ開発者向け):** `System.fs` はカーネル内部・シェル要素・管理者用です。一般アプリからは直接呼び出さず、2 段階権限モデルと連動する `this.fs` (ESKitApp ファサード) を使用してください。
-
-### パス規約
-
-- ユーザーホーム: `/home/{userId}`
-- 共有領域: `/shared`
-- システム領域: `/system`, `/apps`
-- 便利メソッド: `System.homeDir()` で現在ユーザーのホームパスを取得可能
-
-### 書き込み
-
-```js
-const home = System.homeDir();
-
-// テキスト
-await System.fs.writeFile(`${home}/note.txt`, "Hello, ESKit!");
-
-// バイナリ (Uint8Array)
-await System.fs.writeFile(`${home}/icon.png`, new Uint8Array([0x89, 0x50, 0x4e, 0x47, ...]));
-
-// ArrayBuffer
-await System.fs.writeFile(`${home}/data.bin`, arrayBuffer);
-
-// Blob
-await System.fs.writeFile(`${home}/file.dat`, blob);
-```
-
-`writeFile` はすべての入力値を内部的に `Uint8Array` に変換して保存します。親ディレクトリが存在しない場合は自動作成されます。
-
-### 読み込み
-
-```js
-const home = System.homeDir();
-
-// テキストとして読む (UTF-8 デコード)
-const text  = await System.fs.readFile(`${home}/note.txt`);
-
-// バイナリ (Uint8Array) として読む
-const bytes = await System.fs.readFileAsBytes(`${home}/icon.png`);
-```
-
-### ディレクトリ操作
-
-```js
-const home = System.homeDir();
-await System.fs.mkdir(`${home}/docs`, { recursive: true });
-
-const entries = await System.fs.readdir(home);
-// → [{ name: "docs", type: "dir", path: "/home/alice/docs" }, ...]
-```
-
-### ファイル情報・存在確認
-
-```js
-const home = System.homeDir();
-const stat = await System.fs.stat(`${home}/note.txt`);
-// → {
-//      path,
-//      type: "file"|"dir",
-//      size: number,
-//      owner: string,
-//      mode: {
-//        owner:  { read: boolean, write: boolean },
-//        others: { read: boolean, write: boolean }
-//      },
-//      createdAt: number,
-//      modifiedAt: number
-//    }
-
-const exists = await System.fs.exists(`${home}/note.txt`); // boolean
-```
-
-### `mode`
-
-```js
-{
-  owner:  { read: true, write: true },
-  others: { read: false, write: false }
-}
-```
-
-- `owner.read / owner.write`: 所有者の読み書き可否
-- `others.read / others.write`: 非所有者の読み書き可否
-
-### 削除・リネーム
-
-```js
-const home = System.homeDir();
-
-await System.fs.remove(`${home}/note.txt`);
-await System.fs.remove(`${home}/docs`, { recursive: true });
-
-await System.fs.rename(`${home}/old.txt`, `${home}/new.txt`);
-```
-
-### 初期ディレクトリ
-
-ESKit が起動時に自動作成するディレクトリ:
-
-| パス | 用途 |
-|------|------|
-| `/home` | ユーザーホームのルート |
-| `/home/{userId}` | ユーザーホームディレクトリ |
-| `/home/{userId}/desktop` | デスクトップ |
-| `/shared` | 共有領域 |
-| `/system` | システムファイル |
-| `/apps` | アプリ配置領域 |
-
----
-
-## `System.events` — イベントバス
-
-アプリ・システム間の通信に使用する pub/sub バス (`ESKitEventBus`) です。
-
-```js
-// 永続購読 (返値 = 購読解除関数)
-const off = System.events.on("app:opened", ({ uuid, name }) => { ... });
-off(); // 購読解除
-
-// 一度だけ受信
-System.events.once("system:ready", ({ user }) => { ... });
-
-// 手動購読解除
-System.events.off("my-event", handler);
-
-// 発行
-System.events.emit("my-event", { data: 123 });
-```
-
-### システムイベント一覧
-
-| イベント | ペイロード | 発行タイミング |
-|---------|----------|--------------|
-| `system:ready` | `{user}` | ブート完了 |
-| `system:theme-changed` | `{name}` | テーマ変更 |
-| `system:locale-changed` | `{lang}` | 言語変更 |
-| `user:created` | `{user}` | ユーザー作成 |
-| `user:logged-in` | `{user}` | ログイン完了 |
-| `user:logged-out` | `{user}` | ログアウト |
-| `app:opened` | `{uuid, name}` | アプリ起動 |
-| `app:closed` | `{uuid}` | アプリ終了 |
-| `app:focused` | `{uuid}` | ウィンドウフォーカス変更 |
-| `app:titleChanged` | `{uuid, title}` | タイトル変更 |
-| `notification:show` | `{title?, message?, duration?}` | 通知表示 |
-| `launcher:toggle` | — | ランチャー開閉 |
-| `shell:mode-changed` | `{mode, prev}` | desktop/mobile モード切替 |
-| `drawer:open` | — | ドロワーが開かれた |
-| `drawer:close` | — | ドロワーが閉じられた |
-
----
-
-## `System.registry` — アプリレジストリ
-
-```js
-// define.json からアプリを登録
-const manifest = await System.registry.register("apps/myapp/");
-
-// Manifest を手動で登録 (外部アプリインストール等)
-System.registry.registerManual(id, manifest, dir?);
-
-// 登録を解除する
-System.registry.unregister(id);
-
-// ID で Manifest を取得
-const manifest = System.registry.get(id);           // Manifest | null
-
-// ディレクトリで Manifest を取得
-const manifest = System.registry.getByDir(appDir);  // Manifest | null
-
-// 登録済みアプリ一覧 (各オブジェクトに _dir プロパティを付与)
-const apps = System.registry.list();
-// → [{ id, name, entry, version, description, permissions, icon, _dir }, ...]
-
-// 検索 (name / description / id に対してあいまい検索)
-const results = System.registry.search("notepad");
-
-// 外部 URL からインストール (Phase 6)
-await System.registry.registerFromUrl("https://example.com/myapp/");
-```
-
----
-
-## `System.permissions` — 権限マネージャー
-
-通常はシステムが自動的に呼び出しますが、アプリから直接使用することもできます。
-
-```js
-// Install-time チェック (同期): マニフェストに宣言されているか
-System.permissions.isDeclared(uuid, "fs.read"); // boolean
-
-// Runtime チェック (非同期): 実際の許可状態を確認 (必要に応じてダイアログ)
-const granted = await System.permissions.check(uuid, "notifications");
-
-// 権限を明示的に許可 / 拒否し localStorage に永続化する (UUID または App ID)
-System.permissions.grant(appId, "fs.read");         // 許可
-System.permissions.grant(appId, "fs.read", false);  // 拒否 (第 3 引数)
-System.permissions.deny(appId, "fs.read");          // 拒否のショートハンド
-
-// 個別権限の取り消し (次回アクセス時に再確認を要求)
-System.permissions.revokePermission(appId, "fs.read");
-
-// アプリの全権限を取り消し
-System.permissions.revokeAll(appId);
-
-// 権限状態の取得 ("granted" | "denied" | "unprompted")
-const state = System.permissions.getPermissionState(appId, "fs.read");
-
-// アプリ終了時にセッションエントリをクリア (localStorage は維持)
-System.permissions.revoke(uuid);
-```
-
-権限の永続化キーはユーザー単位で分離されます（同じアプリでもログインユーザーごとに許可状態が独立します）。
-
----
-
-## `ESKitApp` — アプリ基底クラス
-
-すべての ESKit アプリはこのクラスを継承します。
-
-### アプリの定義パターン
-
-```js
-import ESKitApp from "system/app.js";
-import { html, css } from "system/util.js";
-
-export default class MyApp extends ESKitApp {
-  // static プロパティでテンプレートとスタイルを宣言する (推奨)
-  static template = html`
-    <h1>Hello, ESKit!</h1>
-    <button id="btn">Click me</button>
-  `;
-
-  static style = css`
-    h1 { color: var(--kit-color-primary); }
-  `;
-
-  initialize() {
-    // _uuid, _windowElement が注入された後に呼ばれる
-    this.querySelector("#btn").addEventListener("click", () => {
-      this.setTitle("Clicked!");
-    });
-  }
-
-  close() {
-    // クリーンアップ (タイマー停止など)
-  }
-}
-
-### ライフサイクルフック
-
-| フック | 呼ばれるタイミング |
-|--------|----------------|
-| `initialize()` | `_uuid`, `_windowElement` 注入後 |
-| `close()` | アプリ終了直前 |
-| `onFocus()` | ウィンドウがフォーカスされた |
-| `onBlur()` | ウィンドウのフォーカスが外れた |
-| `onResize(w, h)` | ウィンドウがリサイズされた |
-| `onMinimize()` | ウィンドウが最小化された |
-| `onRestore()` | ウィンドウが復元された |
-| `onMessage(data)` | `System.sendMessage()` で送信されたデータを受信 |
-
-### 開発者 API
-
-```js
-this.setTitle(title)                  // ウィンドウタイトルを変更
-this.querySelector(selector)          // Shadow DOM 内の要素を取得
-this.querySelectorAll(selector)       // Shadow DOM 内の要素を全取得
-await this.showNotification(opts)     // 通知 (permissions: "notifications" が必要)
-await this.sendMessage(targetUuid, data) // IPC 送信 (permissions: "ipc" が必要)
-await this.listProcesses()            // プロセス一覧取得 (permissions: "system.info" が必要)
-
-// 仮想ファイルシステムファサード (マニフェストの permissions と連動)
-await this.fs.readFile(path)          // 読み取り (permissions: "fs.read" が必要)
-await this.fs.readFileAsBytes(path)   // バイナリ読み取り (permissions: "fs.read" が必要)
-await this.fs.readdir(path)           // 一覧 (permissions: "fs.read" が必要)
-await this.fs.stat(path)              // 情報取得 (permissions: "fs.read" が必要)
-await this.fs.exists(path)            // 存在確認 (permissions: "fs.read" が必要)
-await this.fs.writeFile(path, data)   // 書き込み (permissions: "fs.write" が必要)
-await this.fs.mkdir(path, opts)       // ディレクトリ作成 (permissions: "fs.write" が必要)
-await this.fs.remove(path, opts)      // 削除 (permissions: "fs.write" が必要)
-await this.fs.rename(oldPath, newPath)// リネーム/移動 (permissions: "fs.write" が必要)
-```
-
-### プロパティ
-
-| プロパティ | 説明 |
-|----------|------|
-| `this.name` | アプリ表示名 (コンストラクタクラス名、または `setTitle()` で変更) |
-| `this.manifest` | 全階層をコピー・freezeした読み取り専用 `Manifest`。多言語名・配列なども内部参照を共有しない |
-| `this._uuid` | アプリ固有の UUID |
-| `this._manifest` | `define.json` から読み込まれた Manifest (内部用) |
-| `this._state` | `"running"`, `"minimized"`, `"maximized"`, `"closed"` |
-| `this._windowElement` | 対応する `<eskit-window>` 要素 |
-
----
-
-## 権限モデル
-
-ESKit は iOS / Android と同様の 2 段階権限モデルを採用しています。
-
-```
-Install-time チェック (define.json の permissions[] 宣言)
-  → 宣言あり → Runtime チェック
-                 → localStorage に許可記録あり → 即許可
-                 → 初回アクセス               → Popover ダイアログでユーザー確認
-                                                 → 許可 / 拒否 を localStorage に記録
-  → 宣言なし → 即拒否 (例外なし)
-```
-
-### 利用可能な権限
-
-| 権限 | 説明 |
-|------|------|
-| `fs.read` | 仮想ファイルシステムの読み取り (`readFile`, `readFileAsBytes`, `readdir`, `stat`, `exists`) |
-| `fs.write` | 仮想ファイルシステムへの書き込み (`writeFile`, `mkdir`, `remove`, `rename`) |
-| `fs.read.all` | 管理者向け: 他ユーザー領域を含む広域読み取り |
-| `fs.write.all` | 管理者向け: 他ユーザー領域を含む広域書き込み |
-| `fs.shared` | `/shared` へのアクセス |
-| `notifications` | 通知の表示 (`System.notify`, `this.showNotification`) |
-| `ipc` | 他のアプリへのメッセージ送信 (`System.sendMessage`) |
-| `network` | 外部 URL への fetch |
-| `system.info` | システム情報の取得 (`System.listProcesses`) |
-| `clipboard` | クリップボードへのアクセス (`navigator.clipboard.*`) |
-| `user.info` | 現在ユーザー情報の取得 |
-| `user.manage` | ユーザー作成・削除などの管理操作 |
-
----
-
-## 外部アプリのインストール (Phase 6)
-
-URL を指定してサードパーティアプリをインストールできます。
-
-```js
-await System.registry.registerFromUrl("https://example.com/myapp/");
-```
-
-**インストールフロー:**
-1. `{url}/define.json` を fetch してマニフェストを取得・バリデーション
-2. Popover ダイアログでユーザーに **アプリ名・バージョン・要求権限** を提示
-3. ユーザーが承認 → 動的 `import()` でエントリポイントをロード
-4. localStorage に登録情報を永続化 → 次回起動時に自動復元
-
-**制限:**
-- HTTPS URL のみ許可（http:// は拒否）
-- `network` 権限を宣言していないアプリが外部 fetch を行うと拒否
-
----
-
-## `define.json` — アプリマニフェスト
-
-各アプリのルートディレクトリに配置する JSON ファイルです。
-
-```json
-{
-  "id":          "com.example.myapp",
-  "name":        "My App",
-  "entry":       "main.js",
-  "version":     "1.0.0",
-  "description": "アプリの説明",
-  "icon": {
-    "type": "set",
-    "set": "lucide",
-    "name": "sparkles"
-  },
-  "permissions": ["fs.read", "notifications"]
-}
-```
-
-| フィールド | 必須 | 説明 |
-|---------|------|------|
-| `id` | ✅ | 一意なリバースドメイン形式の ID |
-| `name` | ✅ | 表示名 |
-| `entry` | ✅ | エントリポイント JS ファイル名 |
-| `version` | — | バージョン文字列 (省略時 `"0.0.1"`) |
-| `description` | — | アプリの説明 |
-| `icon` | — | アイコンオブジェクト (`{ type: "set", set?: "lucide", name }` または `{ type: "image", src }`) |
-| `permissions` | — | 要求権限の配列 |
-
----
-
-## Hamon — リアクティブテンプレートエンジン
-
-`system/hamon.js` — シグナル方式のリアクティビティ (VDOM なし) でアプリ UI を宣言的に構築する。
-
-```js
-import hamon, { signal, computed, effect, list, isSignal, HamonScope } from "system/hamon.js";
-```
-
-### signal(initial)
-
-リアクティブな値を作成する。
-
-```js
-const count = signal(0);
-count.value;      // 0 — get (実行中 effect があれば依存登録)
-count.value = 1;  // set — 依存する全 effect が再実行される
-count.peek();     // 1 — 依存追跡なしで現在値を読む
-```
-
-### computed(fn)
-
-読み取り専用の派生シグナル。依存元が変化すると自動再計算される。
-
-```js
-const count  = signal(3);
-const double = computed(() => count.value * 2);
-double.value; // 6
-count.value = 5;
-double.value; // 10
-```
-
-### effect(fn)
-
-副作用を登録する。依存シグナルが変化すると自動再実行。`fn` が関数を返した場合、次回再実行前にクリーンアップとして呼ばれる。
-
-```js
-const dispose = effect(() => {
-  console.log("count =", count.value);
-  return () => console.log("cleanup");
-});
-dispose(); // 手動で解除
-```
-
-### isSignal(v)
-
-引数が Signal オブジェクトかどうかを判定する。
-
-```js
-isSignal(signal(0)); // true
-isSignal(42);        // false
-```
-
-### hamon\`...\`
-
-リアクティブな `DocumentFragment` を返すタグ付きテンプレートリテラル。
-
-```js
-const count = signal(0);
-const fragment = hamon`
-  <button @click=${() => count.value++}>
-    Count: ${() => count.value}
-  </button>
-`;
-```
-
-返却される `fragment` は通常の `DocumentFragment` に `_scope: HamonScope` プロパティが付与されている。`_scope.dispose()` で全バインディングを一括解除できる。
-
-#### テキスト補間
-
-| 構文 | 挙動 |
-|------|------|
-| `${value}` | 静的値をそのまま Text ノードとして挿入 |
-| `${() => expr}` | effect で自動更新。戻り値が Node/Fragment なら DOM 挿入 |
-| `${signalObj}` | Signal の `.value` を effect でバインド |
-
-#### イベントバインディング `@event`
-
-```html
-<button @click=${handler}>...</button>
-<input @input=${(e) => name.value = e.target.value}>
-```
-
-scope dispose 時に `removeEventListener` が自動呼び出しされる。
-
-#### 属性バインディング `:attr`
-
-動的な属性値は必ず `:attr=${value}` の形式で指定します。`title=${value}`、
-`title="${value}"`、`class="prefix ${value}"` はコンパイル時に `TypeError` になります。
-属性名・タグ名の補間、引用符付き／部分的なバインディングも非対応です。
-静的な `title="text"` は引き続き使用できます。
-
-```js
-// 移行前: hamon`<div class="line ${type}" title=${title}></div>`
-hamon`<div :class=${() => `line ${type.value}`} :title=${title}></div>`;
-```
-
-属性値はDOMのプロパティまたは `setAttribute` で設定され、HTMLとして再解析されません。
-これは属性注入の防止であり、危険なURLやイベント属性など任意の属性値の安全性を保証するものではありません。
-
-```html
-<input :value=${() => name.value} :disabled=${() => locked.value}>
-<div :class=${() => active.value ? "on" : "off"}>
-```
-
-| 属性名 | 設定方式 |
-|--------|---------|
-| `value`, `checked`, `selected`, `disabled` | DOM プロパティ直接設定 (`el[attr] = v`) |
-| その他 | `setAttribute` / `removeAttribute` |
-
-`false` / `null` を設定すると属性が除去される。`true` は空文字属性 (`attr=""`) になる。
-
-#### `kit-if` / `kit-else` 条件分岐
-
-```js
-const show = signal(true);
-hamon`
-  <div kit-if=${() => show.value}>表示される</div>
-  <div kit-else>非表示のとき表示</div>
-`;
-```
-
-- Comment ノードをアンカーとして位置を記憶
-- 条件の真偽で要素を DOM に挿入/除去 (ノード実体は保持し再生成しない)
-- `kit-else` は直前の `kit-if` 要素の次の兄弟要素として連動する
-
-### list(itemsFn, renderFn)
-
-リスト描画ヘルパー。テキスト補間内で使用する。
-
-```js
-const items = signal(["Apple", "Banana", "Cherry"]);
-const fragment = hamon`
-  <ul>
-    ${list(() => items.value, (item, i) => hamon`<li>${item}</li>`)}
-  </ul>
-`;
-```
-
-- `itemsFn` — 配列を返す関数 (Signal に依存可能)
-- `renderFn(item, index)` — 各アイテムの DOM を返す関数。`hamon` タグ関数、DOM ノード、文字列のいずれかを返せる
-- 配列が変化するとリスト全体が再レンダリングされる。各アイテムの `_scope` は再レンダリング時に自動 dispose
-
-### HamonScope
-
-Effect のライフサイクルスコープ。アプリ終了時にまとめて dispose するために使用する。
-
-```js
-const scope = new HamonScope();
-const count = scope.signal(0);
-scope.effect(() => console.log(count.value));
-scope.onDispose(() => { /* 任意のクリーンアップ */ });
-scope.dispose(); // スコープ内の全 effect を一括解除
-```
-
-| メソッド | 説明 |
-|---------|------|
-| `signal(v)` | `signal(v)` のエイリアス |
-| `computed(fn)` | `computed(fn)` のエイリアス |
-| `effect(fn)` | effect を作成し dispose を追跡する |
-| `onDispose(fn)` | dispose 時に呼ばれるコールバックを追加 |
-| `dispose()` | 全 effect・コールバックを一括解除 |
-
-### ESKitApp との統合
-
-`ESKitApp` 基底クラスに `hamon` ゲッターが追加されており、アプリ専用の `HamonScope` を利用できる。
-
-```js
-import ESKitApp from "system/app.js";
-import hamon, { signal } from "system/hamon.js";
-
-export default class MyApp extends ESKitApp {
-  constructor() {
-    super();
-    const count = this.hamon.signal(0);
-    this.template = hamon`
-      <button @click=${() => count.value++}>
-        Count: ${() => count.value}
-      </button>
-    `;
-  }
-}
-```
-
-- `this.hamon` は `HamonScope` インスタンスを遅延生成して返す
-- テンプレートに `DocumentFragment` を設定すると、ウィンドウシステムが自動判定して DOM 挿入する
-- アプリ終了時 (`closeApp`) に `_hamonScope.dispose()` が自動呼び出しされ、全 effect が解除される
-
----
-
-## `ESKish` — ターミナルアプリ
-
-ESKit 標準の組み込みターミナル環境 (`apps/eskish/`) です。EcmaScript / ESKit API 風の独自コマンド体系により、仮想ファイルシステムやプロセス、セッションを直感的に操作できます。
-
-### コマンドリファレンス
-
-| コマンド | 短縮形 | 引数 | 説明 | 要求権限 |
-|---------|-------|------|------|---------|
-| `readFile` | `cat` | `<path>` | ファイルをテキストとして読み取り表示 | `fs.read` |
-| `writeFile` | `write` | `<path> <text...>` | ファイルにテキストを書き込み | `fs.write` |
-| `readDir` | `ls`, `dir` | `[path]` | ディレクトリ内のファイル・ディレクトリ一覧 | `fs.read` |
-| `makeDir` | `mkdir` | `<path>` | ディレクトリを作成 (再帰対応) | `fs.write` |
-| `remove` | `rm` | `<path>` | ファイルまたはディレクトリを再帰的削除 | `fs.write` |
-| `rename` | `mv` | `<from> <to>` | ファイル・ディレクトリのリネーム / 移動 | `fs.write` |
-| `stat` | — | `<path>` | ファイル / ディレクトリの詳細情報を表示 | `fs.read` |
-| `changeDir` | `cd` | `[path]` | カレントディレクトリを変更 (`~`, `..` 対応) | `fs.read` |
-| `currentDir` | `pwd` | — | 現在の作業ディレクトリを表示 | (なし) |
-| `listProcesses` | `ps` | — | 実行中のプロセス一覧を表示 | `system.info` |
-| `listApps` | `apps` | — | 登録済みアプリ一覧を表示 | (なし) |
-| `loadApp` | `open` | `<appDir\|appId>` | 指定アプリを起動 | (なし) |
-| `closeApp` | `kill` | `<uuid>` | 指定アプリを終了 | (なし) |
-| `focusApp` | `focus` | `<uuid\|prefix>` | 指定アプリウィンドウを最前面にフォーカス | (なし) |
-| `sendMessage` | `send` | `<uuid\|prefix> <msg>` | プロセスへ IPC メッセージを送信 (JSON自動判定) | `ipc` |
-| `currentUser` | `whoami` | — | 現在ログイン中のユーザー情報を表示 | `user.info` |
-| `listUsers` | `users` | — | 登録済みユーザー一覧を表示 | `user.info` |
-| `logout` | — | — | ログアウトしてログイン画面へ戻る | (なし) |
-| `systemInfo` | `sysinfo` | — | OS・ユーザー・画面解像度等のサマリを表示 | (なし) |
-| `setShellMode` | `mode` | `[mode]` | シェルモード取得または変更 (`desktop`/`mobile`/`auto`) | (なし) |
-| `history` | — | — | コマンド実行履歴を番号付きで表示 | (なし) |
-| `notify` | — | `<title> [message]` | システム通知を発行 | `notifications` |
-| `eval` | `js` | `<code...>` | 現在のコンテキスト (`this`, `System`) で JS 式を実行 | (実行内容に準拠) |
-| `clear` | `cls` | — | ターミナル画面を消去 | (なし) |
-| `help` | `?` | — | 利用可能なコマンド一覧と説明を表示 | (なし) |
-
----
-
-## `System.theme` — テーマ & 外観管理
-
-システム全体のカラーモード（ライト/ダーク/OS連動）、カラーテーマプリセット、カスタム CSS 変数、壁紙を管理する `ESKitTheme` インスタンスです。
-設定は VFS（`/home/{userId}/.config/theme.json`）に永続化されます。
-
-```js
-System.theme.mode;        // "light" | "dark" | "auto"
-System.theme.current;     // 現在のテーマプリセット ID (例: "catppuccin-mocha")
-System.theme.isDark;      // boolean (現在の実効ダークモード判定)
-System.theme.list;        // 利用可能な全テーマ一覧 (ThemeMeta[])
-System.theme.wallpapers;  // 組み込み壁紙プリセット一覧
-System.theme.vars;        // 現在適用されている全 CSS 変数マップ
-System.theme.wallpaper;   // 現在の壁紙 CSS 値
-
-System.theme.setMode("dark");                  // カラーモードを変更 ("light" | "dark" | "auto")
-await System.theme.apply("nord");              // プリセットテーマを適用
-System.theme.applyVars({ "--kit-color-primary": "#e63946" }); // カスタム CSS 変数を直接適用
-await System.theme.setWallpaper("/home/admin/Pictures/my-wall.png"); // VFS パスまたは CSS 値で壁紙を変更 (Blob URL 自動生成)
-await System.theme.load("https://example.com/theme.json"); // 外部 URL からテーマを fetch・インポート
-System.theme.reset();                          // デフォルトテーマにリセット
-const jsonStr = System.theme.export();         // 現在のテーマ設定を JSON 出力
-```
-
-### イベント
-
-テーマ変更時には `System.events` から `"system:theme-changed"` イベントが発行されます。
-```js
-System.events.on("system:theme-changed", ({ id, mode, dark, vars, wallpaper }) => {
-  console.log("Theme updated:", id, mode);
-});
-```
-
----
-
-## `System.i18n` — 多言語対応
-
-Hamon の Signal を活用したリアクティブな多言語翻訳サービスを提供する `ESKitI18n` インスタンスです。
-設定は VFS（`/home/{userId}/.config/i18n.json`）に永続化されます。
-
-```js
-System.i18n.current;      // 現在の言語コード ("ja" | "en")
-System.i18n.available;    // 利用可能な言語一覧 (["ja", "en"])
-System.i18n.locale;       // Hamon Signal<string>
-
-// 翻訳テキストの取得 (Hamon テンプレート内で自動依存追跡)
-System.i18n.t("system.desktop"); // "デスクトップ" (ja) / "Desktop" (en)
-System.i18n.t("verifierTest.testGreeting", { name: "ESKit" }); // テンプレート変数補間
-
-// 言語の変更
-await System.i18n.setLocale("en");
-
-// アプリ独自辞書の登録・拡張
-System.i18n.extend("myApp", "ja", {
-  title: "マイアプリ",
-  welcome: "ようこそ {user} さん",
-});
-```
-
----
-
-## `System.dialog` — 汎用ダイアログ
-
-Popover API を用いたモーダル・ダイアログの表示と非同期待機を提供するファサードです。
+Popover API を用いたシステム標準ダイアログと仮想 FS ファイル選択ダイアログです。アプリ内では `this.alert()` / `this.confirm()` / `this.prompt()` / `this.showOpenFilePicker()` のショートハンドも使えます。
 
 ```js
 // 1. アラート
@@ -967,7 +405,7 @@ const ok = await System.dialog.confirm({
 });
 
 // 3. 入力ダイアログ
-const input = await System.dialog.prompt({
+const folderName = await System.dialog.prompt({
   title: "新しいフォルダ名",
   defaultValue: "New Folder",
   placeholder: "フォルダ名を入力",
@@ -984,25 +422,29 @@ const buttonId = await System.dialog.custom({
   ],
 });
 
-// 5. 汎用ファイル選択ダイアログ (File Picker)
-const filePath = await System.dialog.showOpenFilePicker({
+// 5. 汎用ファイル選択ダイアログ (※ System.dialog ではなく System 直下)
+const filePath = await System.showOpenFilePicker({
   title: "画像を選択",
   startPath: "/home/admin/Pictures",
   accepts: [".png", ".jpg", ".jpeg", ".webp", ".svg"],
 });
-if (filePath) {
-  console.log("Selected file:", filePath);
-}
 ```
 
 ---
 
-## `System.notifications` — 通知センター
-
-受信した通知の履歴管理と状態管理を行うストアです。
+### 2.4 `System.notifications` & `System.notify`
 
 ```js
-System.notifications.list();         // 受信した通知一覧 ({ id, title, message, type, time, read }[])
+// トースト通知を発行し、履歴ストアに追加
+System.notify({
+  title: "保存しました",
+  message: "Welcome.txt を更新しました",
+  type: "info", // "info" | "success" | "warning" | "error"
+  duration: 4000,
+});
+
+// 通知履歴ストアの操作
+System.notifications.list();         // [{ id, title, message, type, icon, time, read }, ...]
 System.notifications.unreadCount;    // 未読通知数
 System.notifications.markAllRead();  // すべて既読にする
 System.notifications.clear();        // 履歴をすべて消去
@@ -1010,139 +452,375 @@ System.notifications.clear();        // 履歴をすべて消去
 
 ---
 
-## `設定` (SettingsApp) — システム設定アプリ
+## 3. システムコア・サービス API
 
-`apps/settings/` に配置された、Hamon リアクティブテンプレートエンジンで構築された標準設定アプリです。
+### 3.1 `System` (グローバル) & `System.ready`
 
-### 提供機能
-1. **外観 (Appearance):** カラーモード（ライト/ダーク/OS連動）切替、8 種類のテーマプリセット選択、壁紙ギャラリー選択、外部 URL からのテーマインポート、現在のテーマ設定のエクスポート
-2. **言語 (Language):** 表示言語（日本語 / English）の即時切替
-3. **通知 (Notifications):** 通知履歴（Notification Center）の閲覧・消去、テスト通知送信
-4. **システム (System):** OS バージョン・ユーザー・シェルモード等のシステムサマリ、実行中プロセス一覧と強制終了
-5. **権限 (Permissions):** 実行中アプリの要求権限一覧の確認と個別取り消し
+`window.System`（`globalThis.System`）として公開される `ESKitSystem` のインスタンスです。
+
+> **ES Modules に関する注意:** `index.html` は `type="module"` で読み込まれるため、ファイル先頭で `const System = globalThis.System;` と宣言するか `globalThis.System` 経由で参照してください。
+
+```js
+const System = globalThis.System;
+
+await System.ready;                                   // system:ready 発火まで待機
+await System.loadApp("apps/myapp/", { filePath });    // アプリを起動 → UUID を返す
+await System.openFile("/home/admin/desktop/Welcome.txt"); // 拡張子関連付けで起動
+System.closeApp(uuid);                                // アプリを終了
+System.getApp(uuid);                                  // ESKitApp インスタンス取得
+System.listProcesses();                               // [{ uuid, name, icon, state }, ...]
+System.listApps();                                    // 登録済み Manifest 一覧
+System.sendMessage(targetUuid, data);                 // アプリ間 IPC
+System.setShellMode("desktop" | "mobile" | "auto");   // シェルモード切替
+System.nextZIndex();                                  // フォーカス用 z-index 取得
+System.generateUUID();                                // crypto.randomUUID() ラッパー
+System.currentUser;                                   // { id, name, isAdmin, createdAt } | null
+System.homeDir();                                     // 現在ユーザーのホームパス (例: "/home/admin")
+System.homeDir("alice");                              // 指定ユーザーのホームパス
+System.logout();                                      // ログアウトしてリロード
+```
+
+#### サブシステム一覧
+
+| プロパティ | クラス / 実体 | 役割 |
+|-----------|--------------|------|
+| `System.events` | `ESKitEventBus` | イベントバス |
+| `System.fs` | `ESKitFileSystem` | 仮想ファイルシステム (IndexedDB) |
+| `System.registry` | `ESKitRegistry` | アプリレジストリ |
+| `System.permissions` | `ESKitPermissions` | 権限マネージャー |
+| `System.users` | `ESKitUsers` | ユーザー / セッション管理 |
+| `System.shellMode` | `ESKitShellMode` | desktop / mobile モード管理 |
+| `System.icons` | `ESKitIcons` | アイコンレジストリ |
+| `System.theme` | `ESKitTheme` | テーマ・壁紙管理 |
+| `System.i18n` | `ESKitI18n` | 多言語辞書・翻訳サービス |
+| `System.manifest` | `ESKitManifest` | マニフェスト検証ユーティリティ |
+| `System.dialog` | `ESKitDialogElement` | モーダルダイアログ |
+| `System.notifications` | `ESKitNotificationsStore` | 通知履歴ストア |
+| `System.WindowSystem` | `ESKitWindowSystem` | ウィンドウ / シェル UI 管理（ブート後） |
 
 ---
 
-## `ファイル関連付け & 起動引数` (Phase 6)
+### 3.2 `System.fs` — 仮想ファイルシステム
 
-### `System.openFile(filePath)`
-ファイルパスの拡張子から対応するアプリを自動検出し、ファイルパスを渡して起動します。
+IndexedDB (`eskit-fs` v1 / ストア `files`) 上に実装された仮想ファイルシステムです。
+
+> **アプリ開発者向け:** 一般アプリからは `System.fs` を直接呼ばず、権限チェックと連動する `this.fs`（`ESKitApp` ファサード）を使用してください。
+
+#### パス規約と初期ディレクトリ
+
+- ユーザーホーム: `/home/{userId}`（配下に `desktop/`, `documents/`, `bin/`, `.config/` を自動生成）
+- 共有領域: `/shared`
+- システム領域: `/system`, `/apps`, `/system/bin`
+
+#### ファイル・ディレクトリ操作
 
 ```js
-await System.openFile("/home/alice/desktop/Welcome.txt"); // Notepad が起動してファイルが開く
+const home = System.homeDir();
+
+// 書き込み (文字列 / Uint8Array / ArrayBuffer / Blob を内部的に Uint8Array へ変換、親ディレクトリ自動作成)
+await System.fs.writeFile(`${home}/note.txt`, "Hello, ESKit!");
+await System.fs.writeFile(`${home}/icon.png`, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+
+// 読み込み
+const text  = await System.fs.readFile(`${home}/note.txt`);        // UTF-8 テキスト
+const bytes = await System.fs.readFileAsBytes(`${home}/icon.png`); // Uint8Array
+
+// ディレクトリ・情報・削除・移動
+await System.fs.mkdir(`${home}/docs`, { recursive: true });
+const entries = await System.fs.readdir(home); // [{ name, path, type, owner, mode, size, createdAt, modifiedAt }, ...]
+const info    = await System.fs.stat(`${home}/note.txt`);
+const ok      = await System.fs.exists(`${home}/note.txt`);
+await System.fs.rename(`${home}/note.txt`, `${home}/memo.txt`);
+await System.fs.remove(`${home}/docs`, { recursive: true });
 ```
 
-### `define.json` での拡張子宣言
-```json
-{
-  "id": "eskit.notepad",
-  "name": "Notepad",
-  "entry": "main.js",
-  "fileAssociations": [".txt", ".md", ".json", ".js", ".css", ".html"]
-}
-```
+#### アクセスモード (`mode`)
 
-### アプリ側でのファイルオープン受信
-```js
-export default class NotepadApp extends ESKitApp {
-  initialize() {
-    // UIの初期化のみ。filePathの配送はSystemが一度だけ行う。
-  }
+各エントリには `owner` と `mode`（`owner: { read, write }`, `others: { read, write }`）が付与されます。
 
-  // 関連付け・オープン用ライフサイクルフック
-  async onOpenFile(filePath) {
-    const text = await this.fs.readFile(filePath);
-    // ファイル内容の読み込みと表示
-  }
-}
-```
-
-`loadApp()` は `initialize()` の後に `onOpenFile()` の完了を待ち、`app:opened` を発行します。
-読み込みに失敗した場合は翻訳済みのエラー通知を表示し、アプリを残してUUIDを返します。
-`openFile()` は `Promise<string|null>` を返し、対応アプリがない場合はダイアログ表示後に `null` を返します。
-タスクバーには現在のウィンドウタイトルが反映され、言語変更でファイル名を上書きしません。
+- ユーザーホーム (`/home/{id}`): 作成者のみ読み書き可（`others` は不可）
+- 通常ファイル: `owner` 読み書き可 / `others` 不可
+- 通常ディレクトリ: `owner` 読み書き可 / `others` 読み取りのみ可
 
 ---
 
-## `PWA & Service Worker` (Phase 6)
+### 3.3 `System.users` — ユーザー / セッション
 
-ESKit は PWA (Progressive Web Apps) として設計されており、ブラウザへのインストールとオフライン実行に対応しています。
+ユーザーとログインセッションを管理する `ESKitUsers` インスタンスです。
 
-- **`manifest.webmanifest`**: 相対 `start_url: "./index.html"` および `scope: "./"` を指定し、ルートおよびサブディレクトリ（GitHub Pages 等）への配置に対応。
-- **`sw.js`**: **Network-First** 戦略を採用。オンライン時は常に最新コードを即時反映し、オフライン・通信障害時はキャッシュからレスポンス。
-- **`system/pwa.js`**: Service Worker の更新を監視し、新規バージョン検知時にユーザーへ再読み込み通知トーストを表示。
+```js
+System.users.hasUsers();
+System.users.list();
+System.users.get("admin");
+System.users.getCurrent();
 
-更新SWは待機し、通知の「再読み込み」を選んだタブで `SKIP_WAITING` を送信します。
-対象SWへの制御切替を確認してから、一度だけ再読み込みします。初回インストールと他タブの更新では自動再読み込みしません。
-通知は待機中SWごとに一度、操作するまで表示されます。送信失敗・SW失効・30秒の待機超過では
-再読み込みせずエラーと再試行ボタンを表示します。保存していない編集内容は再読み込み前に保存してください。
+await System.users.create({
+  id: "alice",
+  name: "Alice",
+  password: "password123",
+  isAdmin: false,
+});
 
-壁紙・テーマの適用は非同期です。呼び出し側は `await System.theme.setWallpaper(value)` /
-`await System.theme.apply(id)` の後に `resolvedWallpaper` を参照してください。
-処理が競合した場合は最新の選択を保持し、古い処理の完了で上書きしません。
+await System.users.login("alice", "password123");
+await System.users.delete("alice");
+System.users.logout();
+```
+
+#### ユーザー仕様
+
+- **初回ブート時:** ユーザーが存在しない場合、システムが自動でデフォルト管理者 `admin`（`isAdmin: true`, 空パスワード）を作成して自動ログインします。
+- **ユーザー ID:** 英小文字で始まる 1〜31 文字（英小文字・数字・`_`・`-`）。
+- **パスワード:** 空欄または 4 文字以上。PBKDF2 (SHA-256, 210,000 回反復) でハッシュ化して `localStorage` に保存します。
+- **権限制約:** `isAdmin: true` ユーザーの作成（既存ユーザーがいる場合）および `delete()` は管理者のみ実行可能です。最後の管理者ユーザーは削除できません。
+- **セッション:** ログイン中のユーザー ID は `localStorage` に保持されます。
 
 ---
 
-## `標準サンプルアプリ` (Phase 6)
+### 3.4 `System.registry` — アプリレジストリ & 外部アプリインストール
 
-| アプリ | ディレクトリ | 説明 | 主な機能 |
-|--------|------------|------|---------|
-| **Notepad** | `apps/notepad/` | テキスト/コードエディタ | VFS 読込・保存・別名保存・PCダウンロード・行/文字数カウント・変更検知・Ctrl+S 保存・拡張子関連付け |
-| **電卓 (Calculator)** | `apps/calculator/` | 四則演算電卓 | 8桁高精度四則演算・数式表示・符号反転・パーセント・キーボード操作対応 (0-9, +-*/, Enter, Esc) |
-| **時計 (Clock)** | `apps/clock/` | 世界時計/ストップウォッチ/タイマー | SVG アナログ時計・デジタル時計・ミリ秒ストップウォッチ・ラップ記録・カウントダウンタイマー (Web Audio アラーム & 通知) |
-| **ファイル (FileManager)** | `apps/filemanager/` | 仮想 FS マネージャー | 階層ナビゲーション・サイドバーショートカット・フォルダ/ファイル作成・リネーム・削除・PCからのファイル導入 (Upload/Drag&Drop)・PCへの保存 (Download)・コンテキストメニュー |
+組み込みアプリおよび外部 URL アプリの登録・検索・永続化を行います。
+
+```js
+// 登録・取得・検索
+await System.registry.register("apps/myapp/");
+System.registry.get("com.example.myapp");
+System.registry.getByDir("apps/myapp/");
+System.registry.list();
+System.registry.search("notepad");
+System.registry.findAppByExtension(".txt");
+
+// 外部 URL からインストール / アンインストール
+await System.registry.registerFromUrl("https://example.com/myapp/");
+await System.registry.uninstall("com.example.myapp");
+```
+
+#### `registerFromUrl(url)` の動作フロー
+
+1. URL を検証（`https://`、同一オリジンの相対パス `./`・`/`、`http://localhost` のみ許可）し、`{url}/define.json` を `fetch` して `ESKitManifest.validate()` で検証します。**登録時にはエントリポイントのコードは実行しません。**
+2. `<eskit-dialog>` でアプリ名・バージョン・ID・説明・要求権限をユーザーに提示して確認します。
+3. 承認されるとレジストリに登録し、VFS（管理者は `/system/installed-apps.json`、一般ユーザーは `/home/{userId}/.config/installed-apps.json`）に保存し、`registry:installed` を発行します。
+4. 実際のコード読み込みは `System.loadApp()` 実行時に Native `import()` で行われます。
 
 ---
 
-## `アプリ多言語化 (App i18n) & マニフェスト拡張` (Phase 6)
-
-### 多言語対応マニフェスト (`define.json`)
-`name` および `description` に言語別オブジェクト（`Record<string, string>`）を指定可能です。後方互換性のため文字列指定も継続してサポートされます。また、アプリ固有の辞書ディレクトリ（`"i18n": "./i18n/"`）を指定できます。
-
-```json
-{
-  "id": "eskit.notepad",
-  "name": {
-    "ja": "メモ帳",
-    "en": "Notepad"
-  },
-  "description": {
-    "ja": "シンプルなテキスト・コードエディタ",
-    "en": "Simple text and code editor"
-  },
-  "entry": "main.js",
-  "version": "1.0.0",
-  "i18n": "./i18n/"
-}
-```
-
-### アプリ固有の翻訳辞書 (`apps/*/i18n/{lang}.json`)
-アプリディレクトリ内に各言語の JSON 辞書を配置します。
-
-```json
-// apps/notepad/i18n/ja.json
-{
-  "file": "ファイル",
-  "save": "保存",
-  "unsaved": "未保存の変更があります"
-}
-```
-
-### アプリ内での翻訳利用 (`this.t()`)
-`ESKitApp` クラスの `this.t(key, vars)` は、アプリ自身の名前空間（例: `notepad.file`）およびグローバルシステム辞書を透過的に解決します。
+### 3.5 `System.permissions` — 権限マネージャー
 
 ```js
-// 短縮キー、フルキーのどちらでも利用可能
-this.t("save");          // => "保存" (apps/notepad/i18n/ja.json)
-this.t("notepad.save");  // => "保存"
+// Install-time チェック (同期)
+System.permissions.isDeclared(uuid, "fs.read"); // boolean
+
+// Runtime チェック (非同期、初回はダイアログ表示)
+const granted = await System.permissions.check(uuid, "notifications");
+
+// 明示的な許可 / 拒否 / 取消 (ユーザーごとに localStorage へ永続化)
+System.permissions.grant(appId, "fs.read");         // 許可
+System.permissions.grant(appId, "fs.read", false);  // 拒否
+System.permissions.deny(appId, "fs.read");          // 拒否ショートハンド
+System.permissions.revokePermission(appId, "fs.read"); // 個別取り消し
+System.permissions.revokeAll(appId);                // アプリの全権限を取り消し
+System.permissions.getPermissionState(appId, "fs.read"); // "granted" | "denied" | "unprompted"
+System.permissions.revoke(uuid);                    // セッションキャッシュのみ解除
 ```
 
-### ウィンドウタイトルの自動同期 & リアクティブ更新
-アプリはマニフェスト名および言語設定（`System.i18n.locale`）に応じたウィンドウタイトルを自動的に同期します。アプリ固有のタイトルを設定する場合、文字列に加えて Hamon シグナルや getter 関数を渡すことで、リアクティブなタイトル同期が可能です。
+---
+
+### 3.6 `System.events` — イベントバス & システムイベント一覧
+
+シンプルな pub/sub イベントバスです。
 
 ```js
-// 動的なリアクティブタイトル
-this.setTitle(() => `${this.filePath.value || "Untitled"} - ${this.t("notepad.name")}`);
+const off = System.events.on("app:opened", ({ uuid, name }) => { ... });
+off(); // 購読解除
+System.events.once("system:ready", ({ user }) => { ... });
+System.events.emit("custom:event", { foo: "bar" });
 ```
 
+#### システムイベント一覧
 
+| イベント名 | ペイロード | 発行タイミング |
+|-----------|-----------|--------------|
+| `system:ready` | `{ user }` | ブート完了時 |
+| `system:theme-changed` | `{ id, mode, dark, vars, wallpaper, resolvedWallpaper }` | テーマ・モード・壁紙変更時 |
+| `system:locale-changed` | `{ lang }` | 表示言語変更時 |
+| `app:opened` | `{ uuid, name, icon, manifest }` | アプリ起動・初期ファイル配送完了後 |
+| `app:closed` | `{ uuid }` | アプリ終了時 |
+| `app:focused` | `{ uuid }` | ウィンドウフォーカス変更時 |
+| `app:titleChanged` | `{ uuid, title }` | ウィンドウタイトル変更時 |
+| `notification:show` | `{ ...opts, id }` | トースト通知表示時 |
+| `notifications:updated` | — | 通知履歴の既読・消去時 |
+| `launcher:toggle` | — | ランチャー開閉トグル時 |
+| `shell:mode-changed` | `{ mode, prev }` | desktop / mobile モード切替時 |
+| `drawer:open` / `drawer:close` | — | モバイルドロワー開閉時 |
+| `registry:installed` | `{ id, manifest, dir }` | 外部アプリ登録完了時 |
+| `registry:uninstalled` | `{ id }` | 外部アプリ登録解除完了時 |
+| `permissions:changed` | `{ appId, permission?, state }` | 権限の許可・拒否・取り消し時 |
+| `user:created` | `{ user }` | 初回デフォルトユーザー等作成時 |
+| `user:logged-in` / `user:logged-out` | `{ user }` | ログイン / ログアウト時 |
+
+---
+
+### 3.7 `System.theme` — テーマ & 外観管理
+
+カラーモード（`"light"` / `"dark"` / `"auto"`）、プリセット、カスタム CSS 変数、壁紙を管理します。設定は VFS（`/home/{userId}/.config/theme.json`）に保存されます。
+
+```js
+System.theme.mode;              // "light" | "dark" | "auto"
+System.theme.current;           // 現在のテーマプリセット ID
+System.theme.isDark;            // 実効ダークモード判定
+System.theme.list;              // 利用可能テーマ一覧
+System.theme.wallpapers;        // 組み込み壁紙プリセット一覧
+System.theme.vars;              // 現在の CSS 変数マップ
+System.theme.wallpaper;         // 設定中の壁紙値または VFS パス
+System.theme.resolvedWallpaper; // Blob URL 等へ解決済みの CSS 背景値
+
+System.theme.setMode("dark");
+await System.theme.apply("nord");
+System.theme.applyVars({ "--kit-color-primary": "#e63946" });
+await System.theme.setWallpaper("/home/admin/Pictures/wall.png");
+await System.theme.load("https://example.com/theme.json");
+System.theme.reset();
+const json = System.theme.export();
+```
+
+> **非同期適用に関する注意:** テーマ・壁紙の適用は非同期で行われます。`resolvedWallpaper` を参照する場合は `await System.theme.apply(id)` や `await System.theme.setWallpaper(value)` の完了後に参照してください（競合時は最新の選択が優先されます）。
+
+---
+
+### 3.8 `System.i18n` — 多言語対応サービス
+
+Hamon Signal を活用した翻訳サービスです。設定は VFS（`/home/{userId}/.config/i18n.json`）に保存されます。
+
+```js
+System.i18n.current;    // 現在の言語コード ("ja" | "en")
+System.i18n.available;  // ["ja", "en"]
+System.i18n.locale;     // Hamon Signal<string>
+
+System.i18n.t("system.desktop");
+System.i18n.t("verifierTest.testGreeting", { name: "ESKit" });
+await System.i18n.setLocale("en");
+System.i18n.extend("myApp", "ja", { title: "マイアプリ" });
+```
+
+---
+
+### 3.9 `System.shellMode` — シェルモード
+
+ビューポート幅（`max-width: 768px`）の自動検出と手動切替を管理します。
+
+```js
+System.shellMode.current;   // "desktop" | "mobile"
+System.shellMode.isDesktop; // boolean
+System.shellMode.isMobile;  // boolean
+System.shellMode.isLocked;  // 手動固定中なら true
+
+System.shellMode.set("mobile"); // 手動固定
+System.shellMode.unlock();      // 自動検出に復帰
+```
+
+---
+
+### 3.10 `System.WindowSystem` & `ESKitWindowElement`
+
+ブート完了後に利用可能なウィンドウ・シェル UI 管理クラスです。
+
+```js
+System.WindowSystem.activeUuid;
+System.WindowSystem.getElement(uuid);
+System.WindowSystem.activateWindow(uuid);
+System.WindowSystem.getAllElements();
+```
+
+#### シェル UI 要素
+
+| プロパティ | 要素 | 説明 |
+|-----------|------|------|
+| `WindowSystem.desktopElement` | `<eskit-desktop>` | デスクトップルート |
+| `WindowSystem.contextMenu` | `<eskit-context-menu>` | 右クリックコンテキストメニュー (`show(x, y, items)`, `hide()`) |
+| `WindowSystem.beacon` | `<eskit-beacon>` | グローバル検索オーバーレイ (`Ctrl/Cmd + Space`, `show()`, `hide()`, `toggle()`) |
+| `WindowSystem.quickSettings` | `<eskit-quick-settings>` | クイック設定パネル (`show()`, `hide()`, `toggle()`) |
+| `WindowSystem.taskbar` | `<eskit-taskbar>` | タスクバー (desktop) |
+| `WindowSystem.launcher` | `<eskit-launcher>` | ランチャー (desktop) |
+| `WindowSystem.drawer` | `<eskit-drawer>` | アプリドロワー (mobile) |
+| `WindowSystem.homeBar` | `<eskit-home-bar>` | ホームバー (mobile) |
+
+#### `ESKitWindowElement` (`app._windowElement`)
+
+- **メソッド:** `focus()`, `minimize()`, `maximize()`, `restore()`, `snap("left" | "right")`, `setTitle(title)`
+- **ドラッグ / リサイズ / スナップ:** タイトルバーのドラッグ移動・ダブルクリックで最大化トグル、8 方向リサイズ（最小 220×120px）、画面上端/左右端へのドラッグでスナッププレビューと確定。
+
+---
+
+### 3.11 PWA & Service Worker
+
+- **`manifest.webmanifest`:** 相対 `start_url: "./index.html"` / `scope: "./"` によりサブディレクトリ配信にも対応。
+- **`sw.js`:** **Network-First** 戦略。オンライン時は最新ファイルを取得し、オフライン時はキャッシュから応答します。
+- **`system/pwa.js`:** SW 更新を監視し、新しいバージョンが待機状態になると再読み込み通知トーストを表示します。ユーザーが再読み込みを選ぶと `SKIP_WAITING` を送信し、制御切替を確認してから 1 度だけリロードします。
+
+---
+
+## 4. 組み込みアプリリファレンス
+
+### 4.1 `ESKish` — 標準ターミナル環境
+
+`apps/eskish/` に配置されたターミナル環境です（要求権限: `fs.read`, `fs.write`, `system.info`, `notifications`, `ipc`, `user.info`）。
+
+#### コマンドリファレンス
+
+| コマンド | 短縮形 | 引数 | 説明 | 要求権限 |
+|---------|-------|------|------|---------|
+| `readFile` | `cat` | `<path>` | ファイルをテキストとして表示 | `fs.read` |
+| `writeFile` | `write` | `<path> <text...>` | ファイルにテキストを書き込み | `fs.write` |
+| `readDir` | `ls`, `dir` | `[path]` | ディレクトリ内容一覧 | `fs.read` |
+| `makeDir` | `mkdir` | `<path>` | ディレクトリ作成（再帰対応） | `fs.write` |
+| `remove` | `rm` | `<path>` | ファイル・ディレクトリ再帰削除 | `fs.write` |
+| `rename` | `mv` | `<from> <to>` | リネーム / 移動 | `fs.write` |
+| `stat` | — | `<path>` | 詳細情報表示 | `fs.read` |
+| `changeDir` | `cd` | `[path]` | カレントディレクトリ移動 (`~`, `..` 対応) | `fs.read` |
+| `currentDir` | `pwd` | — | カレントディレクトリ表示 | — |
+| `listProcesses` | `ps` | — | 実行中プロセス一覧 | `system.info` |
+| `listApps` | `apps` | — | 登録済みアプリ一覧 | — |
+| `loadApp` | `open` | `<appDir\|appId>` | アプリ起動 | — |
+| `closeApp` | `kill` | `<uuid>` | アプリ終了 | — |
+| `focusApp` | `focus` | `<uuid\|prefix>` | ウィンドウを前面フォーカス | — |
+| `sendMessage` | `send`, `ipc` | `<uuid\|prefix> <msg>` | IPC メッセージ送信 (JSON 自動判定) | `ipc` |
+| `currentUser` | `whoami` | — | 現在ユーザー表示 | `user.info` |
+| `listUsers` | `users` | — | 登録ユーザー一覧 | `user.info` |
+| `logout` | — | — | ログアウト | — |
+| `systemInfo` | `sysinfo` | — | OS・ユーザー・画面情報サマリ | — |
+| `setShellMode` | `mode` | `[mode]` | シェルモード取得・切替 | — |
+| `openFile` | — | `<path>` | 関連付けアプリでファイルを開く | — |
+| `installApp` | — | `<url>` | 外部 URL アプリをインストール | — |
+| `uninstallApp` | — | `<id>` | 外部アプリをアンインストール | — |
+| `history` | — | — | コマンド履歴表示 | — |
+| `notify` | — | `<title> [message]` | システム通知発行 | `notifications` |
+| `eval` | `js` | `<code...>` | JS 式を実行 | 実行内容に準拠 |
+| `clear` | `cls` | — | 画面消去 | — |
+| `help` | `?` | — | ヘルプ表示 | — |
+
+#### カスタムコマンド拡張
+
+- **VFS スクリプト:** `/home/{userId}/bin/<cmd>.js` または `/system/bin/<cmd>.js` に `export default async function({ System, app, fs, args }) { ... }` を配置すると、`<cmd>` コマンドとして実行できます。
+- **静的登録:** `ESKishApp.registerCommand(name, handler)`（またはインスタンスの `registerCommand`）でも拡張可能です。
+
+---
+
+### 4.2 `Settings` — システム設定アプリ
+
+`apps/settings/` に配置された設定アプリです。
+
+1. **外観 (Appearance):** ライト / ダーク / OS 連動切替、テーマプリセット選択、壁紙選択、テーマ JSON のインポート / エクスポート
+2. **言語 (Language):** 日本語 / English の即時切替
+3. **通知 (Notifications):** 通知履歴の閲覧・消去・テスト通知送信
+4. **システム (System):** OS サマリ、実行中プロセス一覧と終了操作
+5. **権限 (Permissions):** 実行中アプリの要求権限確認と個別取り消し
+
+---
+
+### 4.3 標準サンプルアプリ一覧
+
+| アプリ | ディレクトリ | 主な機能 |
+|--------|------------|---------|
+| **Notepad** | `apps/notepad/` | VFS 読込・保存・別名保存・PC ダウンロード・`Ctrl+S`・拡張子関連付け |
+| **Calculator** | `apps/calculator/` | 四則演算・数式表示・符号反転・パーセント・キーボード入力 |
+| **Clock** | `apps/clock/` | アナログ/デジタル時計・ストップウォッチ・タイマー (Web Audio アラーム & 通知) |
+| **FileManager** | `apps/filemanager/` | 階層ナビ・作成/リネーム/削除・PC からの Drag&Drop 導入・PC へのダウンロード |
